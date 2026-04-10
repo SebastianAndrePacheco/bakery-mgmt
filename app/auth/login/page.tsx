@@ -97,8 +97,8 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-4 text-center text-sm text-muted-foreground">
-          <p>Usuario demo: admin@bakery.com</p>
-          <p>Contraseña: admin123</p>
+          <p>Bienvenido</p>
+          <p></p>
         </div>
       </CardContent>
     </Card>
