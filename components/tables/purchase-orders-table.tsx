@@ -15,17 +15,21 @@ interface PurchaseOrdersTableProps {
   orders: PurchaseOrderWithRelations[]
 }
 
-const statusColors = {
+const statusColors: Record<PurchaseOrder['status'], string> = {
   pendiente: 'bg-yellow-100 text-yellow-700',
   enviado: 'bg-blue-100 text-blue-700',
-  recibido: 'bg-green-100 text-green-700',
+  recibido_parcial: 'bg-orange-100 text-orange-700',
+  recibido_completo: 'bg-emerald-100 text-emerald-700',
+  retrasado: 'bg-purple-100 text-purple-700',
   cancelado: 'bg-red-100 text-red-700',
 }
 
-const statusLabels = {
+const statusLabels: Record<PurchaseOrder['status'], string> = {
   pendiente: 'Pendiente',
   enviado: 'Enviado',
-  recibido: 'Recibido',
+  recibido_parcial: 'Recibido Parcial',
+  recibido_completo: 'Recibido Completo',
+  retrasado: 'Retrasado',
   cancelado: 'Cancelado',
 }
 
