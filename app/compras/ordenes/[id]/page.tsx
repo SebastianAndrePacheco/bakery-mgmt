@@ -1,13 +1,12 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Calendar, User, Package, Receipt } from 'lucide-react'
+import { ArrowLeft, Printer } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { formatCurrency } from '@/utils/helpers/currency'
 import { formatDate } from '@/utils/helpers/dates'
+import { formatCurrency } from '@/utils/helpers/currency'
 import { ReceiveOrderForm } from '@/components/forms/receive-order-form'
-import { PurchaseOrderPrint } from '@/components/print/purchase-order-print'
 
 export default async function PurchaseOrderDetailPage({ 
   params 
@@ -16,12 +15,12 @@ export default async function PurchaseOrderDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
-  
+
   const { data: order } = await supabase
     .from('purchase_orders')
     .select(`
       *,
-      supplier:suppliers(id, business_name, ruc, contact_name, phone, email, address)
+      supplier:suppliers(id, business_name, ruc, contact_name, phone)
     `)
     .eq('id', id)
     .single()
@@ -38,6 +37,7 @@ export default async function PurchaseOrderDetailPage({
         id,
         code,
         name,
+        unit_id,
         unit:units(id, name, symbol)
       )
     `)
@@ -61,16 +61,6 @@ export default async function PurchaseOrderDetailPage({
     retrasado: 'Retrasado',
   }
 
-  const comprobanteTipoLabels: Record<string, string> = {
-    factura: 'Factura Electrónica',
-    boleta: 'Boleta de Venta',
-    ticket: 'Ticket',
-    recibo: 'Recibo por Honorarios',
-  }
-
-  const canReceive = order.status === 'pendiente' || order.status === 'enviado' || order.status === 'retrasado'
-  const hasDocuments = order.guia_remision || order.comprobante_serie
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -82,82 +72,84 @@ export default async function PurchaseOrderDetailPage({
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">Orden {order.order_number}</h1>
-            <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${statusColors[order.status] || 'bg-gray-100 text-gray-700'}`}>
-              {statusLabels[order.status] || order.status}
+            <span
+              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                statusColors[order.status]
+              }`}
+            >
+              {statusLabels[order.status]}
             </span>
           </div>
           <p className="text-muted-foreground">
             Creada el {formatDate(order.created_at)}
           </p>
         </div>
-        <div className="flex gap-2">
-          <PurchaseOrderPrint order={order} items={items || []} />
-        </div>
+        <Link href={`/compras/ordenes/${order.id}/print`} target="_blank">
+          <Button variant="outline">
+            <Printer className="w-4 h-4 mr-2" />
+            Imprimir
+          </Button>
+        </Link>
       </div>
 
-      {hasDocuments && (
-        <Card className="border-2 border-blue-200 bg-blue-50">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-blue-900">
-              <Receipt className="w-5 h-5" />
-              Documentos de Recepción
-            </CardTitle>
+            <CardTitle>Información de la Orden</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {order.guia_remision && (
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
-                  <label className="text-sm font-medium text-blue-700">Guía de Remisión</label>
-                  <p className="text-xl font-bold text-blue-900 mt-1">{order.guia_remision}</p>
-                </div>
-              )}
-              {order.comprobante_tipo && (
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
-                  <label className="text-sm font-medium text-blue-700">Tipo de Comprobante</label>
-                  <p className="text-lg font-semibold text-blue-900 mt-1">
-                    {comprobanteTipoLabels[order.comprobante_tipo] || order.comprobante_tipo}
-                  </p>
-                </div>
-              )}
-              {order.comprobante_serie && (
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
-                  <label className="text-sm font-medium text-blue-700">N° Comprobante</label>
-                  <p className="text-xl font-bold text-blue-900 font-mono mt-1">
-                    {order.comprobante_serie}-{order.comprobante_numero}
-                  </p>
-                </div>
-              )}
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-slate-600">Proveedor</label>
+                <p className="text-lg font-semibold">{order.supplier.business_name}</p>
+                <p className="text-sm text-slate-500">RUC: {order.supplier.ruc}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-600">Contacto</label>
+                <p className="text-lg font-semibold">{order.supplier.contact_name}</p>
+                <p className="text-sm text-slate-500">{order.supplier.phone}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-600">Fecha de Orden</label>
+                <p className="text-lg font-semibold">{formatDate(order.order_date)}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-600">Entrega Esperada</label>
+                <p className="text-lg font-semibold">
+                  {order.expected_delivery_date ? formatDate(order.expected_delivery_date) : '-'}
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
-      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="w-5 h-5" />
-            Información del Proveedor
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="text-sm font-medium text-slate-600">Razón Social</label>
-              <p className="text-lg font-semibold">{order.supplier.business_name}</p>
+        <Card>
+          <CardHeader>
+            <CardTitle>Resumen</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-slate-600">Subtotal:</span>
+              <span className="font-semibold">{formatCurrency(order.subtotal)}</span>
             </div>
-            {order.supplier.ruc && (
-              <div>
-                <label className="text-sm font-medium text-slate-600">RUC</label>
-                <p className="text-lg font-mono">{order.supplier.ruc}</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex justify-between">
+              <span className="text-slate-600">IGV (18%):</span>
+              <span className="font-semibold">{formatCurrency(order.tax)}</span>
+            </div>
+            <div className="border-t pt-3 flex justify-between">
+              <span className="text-lg font-semibold">Total:</span>
+              <span className="text-lg font-bold text-purple-600">
+                {formatCurrency(order.total)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Detalle de Insumos</CardTitle>
+          <CardTitle>Ítems de la Orden</CardTitle>
+          <CardDescription>{items?.length || 0} productos ordenados</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -167,52 +159,72 @@ export default async function PurchaseOrderDetailPage({
                   <th className="text-left py-3 px-4 font-semibold text-sm">Código</th>
                   <th className="text-left py-3 px-4 font-semibold text-sm">Insumo</th>
                   <th className="text-right py-3 px-4 font-semibold text-sm">Cantidad</th>
-                  <th className="text-right py-3 px-4 font-semibold text-sm">Precio</th>
+                  <th className="text-right py-3 px-4 font-semibold text-sm">P. Unitario</th>
                   <th className="text-right py-3 px-4 font-semibold text-sm">Total</th>
                 </tr>
               </thead>
-              <tbody>
-                {items?.map((item: any) => (
+              <tbody className="divide-y divide-slate-100">
+                {items?.map((item) => (
                   <tr key={item.id}>
                     <td className="py-3 px-4 font-mono text-sm">{item.supply.code}</td>
-                    <td className="py-3 px-4">{item.supply.name}</td>
-                    <td className="py-3 px-4 text-right">{item.quantity} {item.supply.unit?.symbol}</td>
+                    <td className="py-3 px-4 font-medium">{item.supply.name}</td>
+                    <td className="py-3 px-4 text-right">
+                      {item.quantity} {item.supply.unit?.symbol}
+                    </td>
                     <td className="py-3 px-4 text-right">{formatCurrency(item.unit_price)}</td>
-                    <td className="py-3 px-4 text-right font-semibold">{formatCurrency(item.total)}</td>
+                    <td className="py-3 px-4 text-right font-semibold">
+                      {formatCurrency(item.total)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-6 bg-slate-50 p-6 rounded-lg">
-            <div className="max-w-sm ml-auto space-y-3">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span className="font-semibold">{formatCurrency(order.subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>IGV:</span>
-                <span className="font-semibold">{formatCurrency(order.tax)}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold border-t pt-3">
-                <span>Total:</span>
-                <span>{formatCurrency(order.total)}</span>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
-      {canReceive && (
+      {order.status === 'pendiente' && items && items.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Recibir Orden
-            </CardTitle>
+            <CardTitle>Recibir Mercancía</CardTitle>
+            <CardDescription>
+              Registra la recepción de esta orden de compra
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <ReceiveOrderForm order={order} items={items || []} />
+            <ReceiveOrderForm order={order} items={items} />
+          </CardContent>
+        </Card>
+      )}
+
+      {order.status === 'recibido_completo' && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-green-700 font-medium mb-2">
+                ✅ Esta orden ya fue recibida completamente
+              </p>
+              <div className="text-sm text-green-600 space-y-1">
+                <p>Fecha de recepción: {order.actual_delivery_date ? formatDate(order.actual_delivery_date) : '-'}</p>
+                {order.guia_remision && <p>Guía de Remisión: {order.guia_remision}</p>}
+                {order.comprobante_tipo && (
+                  <p>
+                    {order.comprobante_tipo.toUpperCase()}: {order.comprobante_serie}-{order.comprobante_numero}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {order.notes && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Notas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-slate-700">{order.notes}</p>
           </CardContent>
         </Card>
       )}
