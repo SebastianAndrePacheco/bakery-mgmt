@@ -14,7 +14,8 @@ import {
   Box,
   History,
   ChefHat,
-  ShoppingBag
+  ShoppingBag,
+  Settings
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -37,7 +38,9 @@ const menuItems = [
     icon: Package,
     children: [
       { title: 'Insumos', icon: Box, href: '/inventario/insumos' },
+      { title: 'Productos Terminados', icon: ShoppingBag, href: '/inventario/productos-terminados' },
       { title: 'Kardex', icon: History, href: '/inventario/kardex' },
+      { title: 'Ajustes', icon: Settings, href: '/inventario/ajustes' },
     ],
   },
   {
