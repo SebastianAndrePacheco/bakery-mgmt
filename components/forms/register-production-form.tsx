@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
-import { ProductionOrder } from '@/utils/types/database.types'
 import { Factory, AlertCircle } from 'lucide-react'
 
 interface RegisterProductionFormProps {

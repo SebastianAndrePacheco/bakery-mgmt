@@ -1,12 +1,23 @@
 'use client'
 
-import { ProductionOrder, Product } from '@/utils/types/database.types'
+import { Product } from '@/utils/types/database.types'
 import { Eye, Calendar, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { formatDate } from '@/utils/helpers/dates'
 
-interface ProductionOrderWithRelations extends ProductionOrder {
+interface ProductionOrderWithRelations {
+  id: string
+  order_number: string
+  product_id: string
+  scheduled_date: string
+  production_date: string
+  quantity_planned: number
+  quantity_produced?: number
+  status: string
+  order_type: string
+  notes?: string
+  created_at: string
   product?: Product & { unit?: { symbol: string } }
 }
 
