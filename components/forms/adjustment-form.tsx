@@ -75,7 +75,6 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
       )
 
       router.push('/inventario/ajustes')
-      router.refresh()
 
     } catch (error: any) {
       console.error('Error al registrar ajuste:', error)

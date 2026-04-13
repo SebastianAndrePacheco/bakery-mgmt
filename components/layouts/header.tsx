@@ -18,13 +18,13 @@ export function Header() {
   return (
     <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
       <div>
-        <h2 className="text-lg font-semibold">Bienvenido al Sistema</h2>
+        <h2 className="text-lg font-semibold">Panificadora Ofelia E.I.R.L.</h2>
         <p className="text-sm text-muted-foreground">
-          {new Date().toLocaleDateString('es-PE', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
+          {new Date().toLocaleDateString('es-PE', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
           })}
         </p>
       </div>

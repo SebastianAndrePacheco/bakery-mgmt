@@ -101,7 +101,7 @@ export function Sidebar({ role }: SidebarProps) {
   return (
     <aside className="w-64 bg-slate-900 text-slate-100 min-h-screen p-4">
       <div className="mb-8">
-        <h2 className="text-xl font-bold text-white">Bakery Mgmt</h2>
+        <h2 className="text-xl font-bold text-white leading-tight">Panificadora<br/>Ofelia</h2>
         <p className="text-xs text-slate-400">Sistema de Gestión</p>
       </div>
 

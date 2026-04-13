@@ -36,9 +36,9 @@ export default function LoginPage() {
         <div className="flex items-center justify-center mb-4">
           <div className="text-4xl">🥖</div>
         </div>
-        <CardTitle className="text-2xl text-center">Bakery Management</CardTitle>
+        <CardTitle className="text-2xl text-center">Panificadora Ofelia</CardTitle>
         <CardDescription className="text-center">
-          Ingresa tus credenciales para acceder al sistema
+          Sistema de Gestión — E.I.R.L.
         </CardDescription>
       </CardHeader>
       <CardContent>

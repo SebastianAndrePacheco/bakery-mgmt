@@ -8,11 +8,11 @@ import { AdjustmentsTable } from '@/components/tables/adjustments-table'
 export default async function AdjustmentsPage() {
   const supabase = await createClient()
 
-  // Obtener movimientos de ajuste
+  // Obtener movimientos de ajuste (merma, vencimiento, ajuste_inventario)
   const { data: movements } = await supabase
     .from('inventory_movements')
     .select('*')
-    .eq('movement_reason', 'ajuste')
+    .not('movement_reason', 'in', '(compra,produccion,devolucion_proveedor,venta_manual)')
     .order('movement_date', { ascending: false })
     .limit(50)
 
