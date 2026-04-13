@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Supplier } from '@/utils/types/database.types'
+import { updateSupplier } from '@/app/actions'
 
 interface SupplierEditFormProps {
   supplier: Supplier
@@ -12,8 +12,8 @@ interface SupplierEditFormProps {
 
 export function SupplierEditForm({ supplier }: SupplierEditFormProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     business_name: supplier.business_name,
     ruc: supplier.ruc || '',
@@ -27,22 +27,17 @@ export function SupplierEditForm({ supplier }: SupplierEditFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
-    try {
-      const { error } = await supabase
-        .from('suppliers')
-        .update(formData)
-        .eq('id', supplier.id)
+    const result = await updateSupplier(supplier.id, formData)
 
-      if (error) throw error
-
-      router.push('/compras/proveedores')
-      router.refresh()
-    } catch (error: any) {
-      alert('Error al actualizar proveedor: ' + error.message)
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/compras/proveedores')
   }
 
   return (
@@ -143,6 +138,8 @@ export function SupplierEditForm({ supplier }: SupplierEditFormProps) {
           Proveedor activo
         </label>
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-4">
         <Button type="submit" disabled={loading}>

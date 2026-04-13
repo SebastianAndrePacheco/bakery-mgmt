@@ -32,7 +32,7 @@ export function RegisterProductionForm({ order, ingredients, canProduce }: Regis
     }
 
     const confirm = window.confirm(
-      `🏭 ¿Confirmar producción de ${formData.quantity_produced} ${order.product.unit.symbol} de ${order.product.name}?\n\n` +
+      `¿Confirmar producción de ${formData.quantity_produced} ${order.product.unit.symbol} de ${order.product.name}?\n\n` +
       `Esto consumirá los insumos automáticamente usando FIFO (primero los lotes más viejos).`
     )
 
@@ -41,173 +41,42 @@ export function RegisterProductionForm({ order, ingredients, canProduce }: Regis
     setLoading(true)
 
     try {
-      const quantityProduced = parseFloat(formData.quantity_produced)
+      // Llamada atómica: FIFO + lote de producto + kardex + estado de orden
+      // El costo real se calcula dentro de la función con los lotes FIFO consumidos
+      const { data, error } = await supabase.rpc('complete_production_order', {
+        p_order_id:          order.id,
+        p_quantity_produced: parseFloat(formData.quantity_produced),
+        p_production_date:   formData.production_date,
+        p_notes:             formData.notes || '',
+      })
 
-      // 1. CONSUMIR INSUMOS CON FIFO
-      for (const ingredient of ingredients) {
-        const quantityNeeded = ingredient.quantity * quantityProduced
+      if (error) throw error
 
-        // Obtener lotes disponibles ordenados por FIFO (fecha vencimiento, luego fecha recepción)
-        const { data: batches } = await supabase
-          .from('supply_batches')
-          .select('*')
-          .eq('supply_id', ingredient.supply.id)
-          .eq('status', 'disponible')
-          .gt('current_quantity', 0)
-          .order('expiration_date', { ascending: true, nullsFirst: false })
-          .order('received_date', { ascending: true })
-
-        if (!batches || batches.length === 0) {
-          throw new Error(`No hay lotes disponibles de ${ingredient.supply.name}`)
-        }
-
-        let remaining = quantityNeeded
-        const batchConsumptions = []
-
-        // Consumir de los lotes en orden FIFO
-        for (const batch of batches) {
-          if (remaining <= 0) break
-
-          const toConsume = Math.min(remaining, batch.current_quantity)
-          const newQuantity = batch.current_quantity - toConsume
-
-          // Actualizar el lote
-          const { error: batchError } = await supabase
-            .from('supply_batches')
-            .update({
-              current_quantity: newQuantity,
-              status: newQuantity === 0 ? 'agotado' : 'disponible'
-            })
-            .eq('id', batch.id)
-
-          if (batchError) throw batchError
-
-          batchConsumptions.push({
-            batch_id: batch.id,
-            batch_code: batch.batch_code,
-            consumed: toConsume,
-            unit_cost: batch.unit_price
-          })
-
-          remaining -= toConsume
-        }
-
-        if (remaining > 0) {
-          throw new Error(`Stock insuficiente de ${ingredient.supply.name}. Faltan ${remaining.toFixed(3)} ${ingredient.unit.symbol}`)
-        }
-
-        // Registrar movimientos en kardex por cada lote consumido
-        for (const consumption of batchConsumptions) {
-          const { error: movementError } = await supabase
-            .from('inventory_movements')
-            .insert([{
-              movement_type: 'salida',
-              movement_reason: 'produccion',
-              entity_type: 'insumo',
-              entity_id: ingredient.supply.id,
-              batch_id: consumption.batch_id,
-              quantity: consumption.consumed,
-              unit_id: ingredient.unit_id,
-              unit_cost: consumption.unit_cost,
-              total_cost: consumption.consumed * consumption.unit_cost,
-              reference_type: 'production_order',
-              reference_id: order.id,
-              notes: `Consumo FIFO para producción ${order.order_number} - Lote ${consumption.batch_code}`,
-              movement_date: formData.production_date,
-            }])
-
-          if (movementError) throw movementError
-        }
+      const result = data as {
+        batch_code: string
+        quantity_produced: number
+        total_cost: number
+        unit_cost: number
+        expiration_date: string
       }
 
-      // 2. CREAR LOTE DE PRODUCTO TERMINADO
-      const productBatchCode = `${order.product.code}-${Date.now()}`
-      const productionDate = new Date(formData.production_date)
-      const expirationDate = new Date(productionDate)
-      expirationDate.setDate(expirationDate.getDate() + order.product.shelf_life_days)
+      const expirationFormatted = new Date(result.expiration_date + 'T00:00:00')
+        .toLocaleDateString('es-PE')
 
-      // Calcular costo de producción (suma de costos de insumos consumidos)
-      let totalProductionCost = 0
-      for (const ingredient of ingredients) {
-        const quantityNeeded = ingredient.quantity * quantityProduced
-        const { data: batches } = await supabase
-          .from('supply_batches')
-          .select('unit_price')
-          .eq('supply_id', ingredient.supply.id)
-          .eq('status', 'disponible')
-          .order('received_date', { ascending: true })
-          .limit(1)
-
-        const avgCost = batches?.[0]?.unit_price || 0
-        totalProductionCost += quantityNeeded * avgCost
-      }
-
-      const unitCost = totalProductionCost / quantityProduced
-
-      const { data: productBatch, error: productBatchError } = await supabase
-        .from('production_batches')
-        .insert([{
-          production_order_id: order.id,
-          product_id: order.product_id,
-          batch_code: productBatchCode,
-          quantity_produced: quantityProduced,
-          current_quantity: quantityProduced,
-          production_date: formData.production_date,
-          expiration_date: expirationDate.toISOString().split('T')[0],
-          unit_cost: unitCost,
-          total_cost: totalProductionCost,
-          status: 'disponible',
-        }])
-        .select()
-        .single()
-
-      if (productBatchError) throw productBatchError
-
-      // 3. REGISTRAR MOVIMIENTO DE ENTRADA DEL PRODUCTO
-      const { error: productMovementError } = await supabase
-        .from('inventory_movements')
-        .insert([{
-          movement_type: 'entrada',
-          movement_reason: 'produccion',
-          entity_type: 'producto',
-          entity_id: order.product_id,
-          quantity: quantityProduced,
-          unit_id: order.product.unit.id,
-          unit_cost: unitCost,
-          total_cost: totalProductionCost,
-          reference_type: 'production_order',
-          reference_id: order.id,
-          notes: `Producción completada - Orden ${order.order_number} - Lote ${productBatchCode}`,
-          movement_date: formData.production_date,
-        }])
-
-      if (productMovementError) throw productMovementError
-
-      // 4. ACTUALIZAR ESTADO DE LA ORDEN
-      const { error: orderError } = await supabase
-        .from('production_orders')
-        .update({
-          status: 'completada',
-          quantity_produced: quantityProduced,
-          production_date: formData.production_date,
-          notes: formData.notes || order.notes,
-        })
-        .eq('id', order.id)
-
-      if (orderError) throw orderError
-
-      alert(`✅ Producción registrada exitosamente!\n\n` +
-        `🍞 Producto: ${order.product.name}\n` +
-        `📦 Cantidad: ${quantityProduced} ${order.product.unit.symbol}\n` +
-        `🏷️ Lote: ${productBatchCode}\n` +
-        `💰 Costo Total: S/ ${totalProductionCost.toFixed(2)}\n` +
-        `📅 Vence: ${expirationDate.toLocaleDateString('es-PE')}`)
+      alert(
+        `✅ Producción registrada exitosamente!\n\n` +
+        `Producto: ${order.product.name}\n` +
+        `Cantidad: ${result.quantity_produced} ${order.product.unit.symbol}\n` +
+        `Lote: ${result.batch_code}\n` +
+        `Costo Total: S/ ${Number(result.total_cost).toFixed(2)}\n` +
+        `Vence: ${expirationFormatted}`
+      )
 
       router.push('/produccion/ordenes')
       router.refresh()
 
     } catch (error: any) {
-      console.error('Error completo:', error)
+      console.error('Error al registrar producción:', error)
       alert('❌ Error al registrar producción: ' + error.message)
     } finally {
       setLoading(false)

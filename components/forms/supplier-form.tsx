@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
+import { createSupplier } from '@/app/actions'
 
 export function SupplierForm() {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     business_name: '',
     ruc: '',
@@ -22,21 +22,17 @@ export function SupplierForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
-    try {
-      const { error } = await supabase
-        .from('suppliers')
-        .insert([formData])
+    const result = await createSupplier(formData)
 
-      if (error) throw error
-
-      router.push('/compras/proveedores')
-      router.refresh()
-    } catch (error: any) {
-      alert('Error al crear proveedor: ' + error.message)
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/compras/proveedores')
   }
 
   return (
@@ -137,6 +133,8 @@ export function SupplierForm() {
           Proveedor activo
         </label>
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-4">
         <Button type="submit" disabled={loading}>

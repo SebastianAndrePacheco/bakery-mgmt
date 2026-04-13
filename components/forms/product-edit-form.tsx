@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Product, Category, Unit } from '@/utils/types/database.types'
 import { Save } from 'lucide-react'
+import { updateProduct } from '@/app/actions'
 
 interface ProductEditFormProps {
   product: Product
@@ -15,8 +15,8 @@ interface ProductEditFormProps {
 
 export function ProductEditForm({ product, categories, units }: ProductEditFormProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     code: product.code,
@@ -31,31 +31,20 @@ export function ProductEditForm({ product, categories, units }: ProductEditFormP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
-    try {
-      const { error } = await supabase
-        .from('products')
-        .update({
-          code: formData.code,
-          name: formData.name,
-          category_id: formData.category_id,
-          unit_id: formData.unit_id,
-          shelf_life_days: formData.shelf_life_days,
-          selling_price: formData.selling_price ? parseFloat(formData.selling_price) : null,
-          is_active: formData.is_active,
-        })
-        .eq('id', product.id)
+    const result = await updateProduct(product.id, {
+      ...formData,
+      selling_price: formData.selling_price ? parseFloat(formData.selling_price) : null,
+    })
 
-      if (error) throw error
-
-      router.push('/produccion/productos')
-      router.refresh()
-    } catch (error: any) {
-      console.error('Error:', error)
-      alert('Error al actualizar producto: ' + error.message)
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/produccion/productos')
   }
 
   return (
@@ -182,6 +171,8 @@ export function ProductEditForm({ product, categories, units }: ProductEditFormP
           Producto activo
         </label>
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {/* Botones */}
       <div className="flex gap-4">

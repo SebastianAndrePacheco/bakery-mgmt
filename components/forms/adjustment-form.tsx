@@ -49,119 +49,36 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
     try {
       const quantity = parseFloat(formData.quantity)
 
-      // Si es salida, verificar que haya stock suficiente
-      if (formData.adjustment_type === 'salida') {
-        if (formData.entity_type === 'insumo') {
-          const { data: batches } = await supabase
-            .from('supply_batches')
-            .select('current_quantity')
-            .eq('supply_id', formData.entity_id)
-            .eq('status', 'disponible')
-
-          const totalStock = batches?.reduce((sum, b) => sum + b.current_quantity, 0) || 0
-
-          if (totalStock < quantity) {
-            throw new Error(`Stock insuficiente. Disponible: ${totalStock} ${selectedEntity?.unit?.symbol}`)
-          }
-        } else {
-          const { data: batches } = await supabase
-            .from('production_batches')
-            .select('current_quantity')
-            .eq('product_id', formData.entity_id)
-            .eq('status', 'disponible')
-
-          const totalStock = batches?.reduce((sum, b) => sum + b.current_quantity, 0) || 0
-
-          if (totalStock < quantity) {
-            throw new Error(`Stock insuficiente. Disponible: ${totalStock} ${selectedEntity?.unit?.symbol}`)
-          }
-        }
+      if (!selectedEntity?.unit_id) {
+        throw new Error('No se pudo obtener la unidad del elemento seleccionado')
       }
 
-      // Registrar movimiento en kardex
-      const { error: movementError } = await supabase
-        .from('inventory_movements')
-        .insert([{
-          movement_type: formData.adjustment_type,
-          movement_reason: 'ajuste',
-          entity_type: formData.entity_type,
-          entity_id: formData.entity_id,
-          quantity: quantity,
-          unit_id: selectedEntity?.unit_id,
-          notes: `Ajuste - ${formData.reason}: ${formData.notes || 'Sin observaciones'}`,
-          movement_date: formData.movement_date,
-        }])
+      // Llamada atómica: kardex + actualización FIFO de lotes en una sola transacción
+      // El movimiento_reason se mapea correctamente al ENUM en la función SQL
+      const { error } = await supabase.rpc('record_inventory_adjustment', {
+        p_entity_type:     formData.entity_type,
+        p_entity_id:       formData.entity_id,
+        p_adjustment_type: formData.adjustment_type,
+        p_quantity:        quantity,
+        p_reason:          formData.reason,
+        p_notes:           formData.notes,
+        p_movement_date:   formData.movement_date,
+        p_unit_id:         selectedEntity.unit_id,
+      })
 
-      if (movementError) throw movementError
+      if (error) throw error
 
-      // Actualizar stock de los lotes
-      if (formData.adjustment_type === 'salida') {
-        // Para salidas, consumir FIFO
-        if (formData.entity_type === 'insumo') {
-          const { data: batches } = await supabase
-            .from('supply_batches')
-            .select('*')
-            .eq('supply_id', formData.entity_id)
-            .eq('status', 'disponible')
-            .gt('current_quantity', 0)
-            .order('expiration_date', { ascending: true, nullsFirst: false })
-            .order('received_date', { ascending: true })
-
-          let remaining = quantity
-          for (const batch of batches || []) {
-            if (remaining <= 0) break
-
-            const toDeduct = Math.min(remaining, batch.current_quantity)
-            const newQuantity = batch.current_quantity - toDeduct
-
-            await supabase
-              .from('supply_batches')
-              .update({
-                current_quantity: newQuantity,
-                status: newQuantity === 0 ? 'agotado' : 'disponible'
-              })
-              .eq('id', batch.id)
-
-            remaining -= toDeduct
-          }
-        } else {
-          const { data: batches } = await supabase
-            .from('production_batches')
-            .select('*')
-            .eq('product_id', formData.entity_id)
-            .eq('status', 'disponible')
-            .gt('current_quantity', 0)
-            .order('production_date', { ascending: true })
-
-          let remaining = quantity
-          for (const batch of batches || []) {
-            if (remaining <= 0) break
-
-            const toDeduct = Math.min(remaining, batch.current_quantity)
-            const newQuantity = batch.current_quantity - toDeduct
-
-            await supabase
-              .from('production_batches')
-              .update({
-                current_quantity: newQuantity,
-                status: newQuantity === 0 ? 'agotado' : 'disponible'
-              })
-              .eq('id', batch.id)
-
-            remaining -= toDeduct
-          }
-        }
-      }
-
-      alert(`✅ Ajuste registrado exitosamente!\n\n` +
+      alert(
+        `✅ Ajuste registrado exitosamente!\n\n` +
         `Tipo: ${formData.adjustment_type === 'entrada' ? 'Positivo' : 'Negativo'}\n` +
-        `Cantidad: ${formData.adjustment_type === 'entrada' ? '+' : '-'}${quantity} ${selectedEntity?.unit?.symbol}`)
+        `Cantidad: ${formData.adjustment_type === 'entrada' ? '+' : '-'}${quantity} ${selectedEntity?.unit?.symbol}`
+      )
 
       router.push('/inventario/ajustes')
       router.refresh()
 
     } catch (error: any) {
-      console.error('Error:', error)
+      console.error('Error al registrar ajuste:', error)
       alert('❌ Error al registrar ajuste: ' + error.message)
     } finally {
       setLoading(false)

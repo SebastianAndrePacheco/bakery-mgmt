@@ -1,27 +1,41 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { ProductionOrdersTable } from '@/components/tables/production-orders-table'
 
-export default async function ProductionOrdersPage() {
+const PAGE_SIZE = 20
+
+export default async function ProductionOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, parseInt(pageParam || '1'))
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
   const supabase = await createClient()
-  
-  const { data: orders, error } = await supabase
+
+  const { data: orders, count, error } = await supabase
     .from('production_orders')
     .select(`
       *,
       product:products(id, code, name, unit:units(symbol))
-    `)
+    `, { count: 'exact' })
     .order('production_date', { ascending: false })
-    .limit(50)
+    .range(from, to)
 
   if (error) {
     console.error('Error fetching production orders:', error)
   }
 
-  // Contar por estado
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
+
+  // Contar por estado (solo sobre la página actual es aproximado; para exacto usamos count separado)
   const pending = orders?.filter(o => o.status === 'programada').length || 0
   const inProgress = orders?.filter(o => o.status === 'en_proceso').length || 0
   const completed = orders?.filter(o => o.status === 'completada').length || 0
@@ -69,11 +83,12 @@ export default async function ProductionOrdersPage() {
         <CardHeader>
           <CardTitle>Lista de Órdenes</CardTitle>
           <CardDescription>
-            {orders?.length || 0} órdenes registradas
+            {count || 0} órdenes registradas
           </CardDescription>
         </CardHeader>
         <CardContent>
           <ProductionOrdersTable orders={orders || []} />
+          <Pagination page={page} totalPages={totalPages} basePath="/produccion/ordenes" />
         </CardContent>
       </Card>
     </div>

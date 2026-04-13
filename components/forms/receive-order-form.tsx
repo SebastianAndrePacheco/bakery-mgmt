@@ -35,9 +35,6 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // DEBUG: Ver qué datos tenemos
-    console.log('Items completos:', JSON.stringify(items, null, 2))
-
     const confirm = window.confirm(
       '¿Confirmar recepción de mercancía?\n\nEsto creará los lotes de inventario y actualizará el stock.'
     )
@@ -46,109 +43,43 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
     setLoading(true)
 
     try {
-      // 1. Actualizar orden de compra
-      const { error: orderError } = await supabase
-        .from('purchase_orders')
-        .update({
-          status: 'recibido_completo',
-          actual_delivery_date: formData.received_date,
-          guia_remision: formData.guia_remision,
-          comprobante_tipo: formData.comprobante_tipo,
-          comprobante_serie: formData.comprobante_serie,
-          comprobante_numero: formData.comprobante_numero,
-          comprobante_fecha: formData.comprobante_fecha,
-          comprobante_monto: parseFloat(formData.comprobante_monto),
-        })
-        .eq('id', order.id)
+      // Construir array de ítems para la función RPC
+      const itemsPayload = items
+        .filter(item => parseFloat(receivedQuantities[item.id] || '0') > 0)
+        .map(item => ({
+          supply_id:         item.supply_id,
+          batch_code:        `LOTE-${order.order_number}-${item.supply.code}-${Date.now()}`,
+          quantity_received: parseFloat(receivedQuantities[item.id] || '0'),
+          unit_price:        item.unit_price,
+          expiration_date:   expirationDates[item.id] || '',
+        }))
 
-      if (orderError) throw orderError
-
-      // 2. Crear lotes y registrar en kardex
-      for (const item of items) {
-        const receivedQty = parseFloat(receivedQuantities[item.id] || '0')
-        if (receivedQty <= 0) continue
-
-        console.log('Processing item:', {
-          supply_name: item.supply?.name,
-          supply_id: item.supply_id,
-          unit_id_from_supply: item.supply?.unit_id,
-          unit_from_supply: item.supply?.unit
-        })
-
-        const batchCode = `LOTE-${order.order_number}-${item.supply.code}-${Date.now()}`
-
-        // Crear lote
-        const { data: batch, error: batchError } = await supabase
-          .from('supply_batches')
-          .insert([{
-            supply_id: item.supply_id,
-            supplier_id: order.supplier_id,
-            purchase_order_id: order.id,
-            batch_code: batchCode,
-            quantity_received: receivedQty,
-            unit_price: item.unit_price,
-            total_cost: receivedQty * item.unit_price,
-            expiration_date: expirationDates[item.id] || null,
-            received_date: formData.received_date,
-            current_quantity: receivedQty,
-            status: 'disponible',
-          }])
-          .select()
-          .single()
-
-        if (batchError) throw batchError
-
-        // Obtener el unit_id directamente del supply si no está en el objeto
-        let unitId = item.supply?.unit_id || item.supply?.unit?.id
-
-        // Si aún no lo tenemos, hacer un query
-        if (!unitId) {
-          const { data: supplyData } = await supabase
-            .from('supplies')
-            .select('unit_id')
-            .eq('id', item.supply_id)
-            .single()
-          
-          unitId = supplyData?.unit_id
-        }
-
-        console.log('Unit ID final:', unitId)
-
-        if (!unitId) {
-          throw new Error(`No se pudo obtener unit_id para ${item.supply?.name}`)
-        }
-
-        // Registrar en kardex
-        const { error: movementError } = await supabase
-          .from('inventory_movements')
-          .insert([{
-            movement_type: 'entrada',
-            movement_reason: 'compra',
-            entity_type: 'insumo',
-            entity_id: item.supply_id,
-            batch_id: batch.id,
-            quantity: receivedQty,
-            unit_id: unitId,
-            unit_cost: item.unit_price,
-            total_cost: receivedQty * item.unit_price,
-            reference_type: 'purchase_order',
-            reference_id: order.id,
-            notes: `Recepción de orden ${order.order_number} - GR: ${formData.guia_remision} - ${formData.comprobante_tipo.toUpperCase()}: ${formData.comprobante_serie}-${formData.comprobante_numero}`,
-            movement_date: formData.received_date,
-          }])
-
-        if (movementError) {
-          console.error('Error al insertar movimiento:', movementError)
-          throw movementError
-        }
+      if (itemsPayload.length === 0) {
+        alert('Debe ingresar al menos una cantidad recibida mayor a 0')
+        return
       }
+
+      // Llamada atómica: orden + lotes + kardex en una sola transacción
+      const { error } = await supabase.rpc('receive_purchase_order', {
+        p_order_id:           order.id,
+        p_received_date:      formData.received_date,
+        p_guia_remision:      formData.guia_remision,
+        p_comprobante_tipo:   formData.comprobante_tipo,
+        p_comprobante_serie:  formData.comprobante_serie,
+        p_comprobante_numero: formData.comprobante_numero,
+        p_comprobante_fecha:  formData.comprobante_fecha,
+        p_comprobante_monto:  parseFloat(formData.comprobante_monto),
+        p_items:              itemsPayload,
+      })
+
+      if (error) throw error
 
       alert('✅ Recepción registrada exitosamente!')
       router.push('/compras/ordenes')
       router.refresh()
 
     } catch (error: any) {
-      console.error('Error completo:', error)
+      console.error('Error al registrar recepción:', error)
       alert('❌ Error al registrar recepción: ' + error.message)
     } finally {
       setLoading(false)

@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Product, Unit } from '@/utils/types/database.types'
 import { Factory, AlertCircle } from 'lucide-react'
+import { createProductionOrder } from '@/app/actions'
 
 interface ProductWithUnit extends Product {
   unit?: Unit
@@ -19,6 +20,7 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<ProductWithUnit | null>(null)
   const [recipeItems, setRecipeItems] = useState<any[]>([])
   const [stockWarnings, setStockWarnings] = useState<any[]>([])
@@ -104,33 +106,23 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
     }
 
     setLoading(true)
+    setError(null)
 
-    try {
-      const orderNumber = `PROD-${Date.now()}`
+    const result = await createProductionOrder({
+      product_id: formData.product_id,
+      scheduled_date: formData.scheduled_date,
+      quantity_planned: parseFloat(formData.quantity_planned),
+      order_type: formData.order_type,
+      notes: formData.notes,
+    })
 
-      const { error } = await supabase.from('production_orders').insert([
-        {
-          order_number: orderNumber,
-          product_id: formData.product_id,
-          scheduled_date: formData.scheduled_date,
-          production_date: formData.production_date,
-          quantity_planned: parseFloat(formData.quantity_planned),
-          order_type: formData.order_type,
-          status: 'programada',
-          notes: formData.notes || null,
-        },
-      ])
-
-      if (error) throw error
-
-      router.push('/produccion/ordenes')
-      router.refresh()
-    } catch (error: any) {
-      console.error('Error:', error)
-      alert('Error al crear orden: ' + error.message)
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/produccion/ordenes')
   }
 
   return (
@@ -265,10 +257,12 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
         </div>
       )}
 
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
       <div className="flex gap-4">
-        <Button 
-          type="submit" 
-          disabled={loading || products.length === 0} 
+        <Button
+          type="submit"
+          disabled={loading || products.length === 0}
           className="flex-1"
         >
           <Factory className="w-4 h-4 mr-2" />

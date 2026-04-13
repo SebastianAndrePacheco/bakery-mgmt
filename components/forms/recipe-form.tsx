@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Supply, Unit } from '@/utils/types/database.types'
 import { Plus } from 'lucide-react'
+import { createRecipeItem } from '@/app/actions'
 
 interface RecipeFormProps {
   productId: string
@@ -15,8 +15,8 @@ interface RecipeFormProps {
 
 export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     supply_id: '',
@@ -38,35 +38,25 @@ export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
-    try {
-      const { error } = await supabase.from('product_recipes').insert([
-        {
-          product_id: productId,
-          supply_id: formData.supply_id,
-          quantity: parseFloat(formData.quantity),
-          unit_id: formData.unit_id,
-          notes: formData.notes || null,
-        },
-      ])
+    const result = await createRecipeItem({
+      product_id: productId,
+      supply_id: formData.supply_id,
+      quantity: parseFloat(formData.quantity),
+      unit_id: formData.unit_id,
+      notes: formData.notes,
+    })
 
-      if (error) throw error
-
-      // Reset form
-      setFormData({
-        supply_id: '',
-        quantity: '',
-        unit_id: '',
-        notes: '',
-      })
-
-      router.refresh()
-    } catch (error: any) {
-      console.error('Error:', error)
-      alert('Error al agregar ingrediente: ' + error.message)
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    setFormData({ supply_id: '', quantity: '', unit_id: '', notes: '' })
+    setLoading(false)
+    router.refresh()
   }
 
   return (
@@ -148,6 +138,7 @@ export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
           </Button>
         </div>
       </div>
+      {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
     </form>
   )
 }

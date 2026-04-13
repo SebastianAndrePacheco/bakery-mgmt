@@ -1,21 +1,36 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { SuppliersTable } from '@/components/tables/suppliers-table'
 
-export default async function SuppliersPage() {
+const PAGE_SIZE = 20
+
+export default async function SuppliersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, parseInt(pageParam || '1'))
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
   const supabase = await createClient()
-  
-  const { data: suppliers, error } = await supabase
+
+  const { data: suppliers, count, error } = await supabase
     .from('suppliers')
-    .select('*')
+    .select('*', { count: 'exact' })
     .order('business_name', { ascending: true })
+    .range(from, to)
 
   if (error) {
     console.error('Error fetching suppliers:', error)
   }
+
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -38,11 +53,12 @@ export default async function SuppliersPage() {
         <CardHeader>
           <CardTitle>Lista de Proveedores</CardTitle>
           <CardDescription>
-            {suppliers?.length || 0} proveedores registrados
+            {count || 0} proveedores registrados
           </CardDescription>
         </CardHeader>
         <CardContent>
           <SuppliersTable suppliers={suppliers || []} />
+          <Pagination page={page} totalPages={totalPages} basePath="/compras/proveedores" />
         </CardContent>
       </Card>
     </div>

@@ -1,25 +1,40 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { ProductsTable } from '@/components/tables/products-table'
 
-export default async function ProductsPage() {
+const PAGE_SIZE = 20
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, parseInt(pageParam || '1'))
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
   const supabase = await createClient()
-  
-  const { data: products, error } = await supabase
+
+  const { data: products, count, error } = await supabase
     .from('products')
     .select(`
       *,
       category:categories(id, name, type),
       unit:units(id, name, symbol)
-    `)
+    `, { count: 'exact' })
     .order('name', { ascending: true })
+    .range(from, to)
 
   if (error) {
     console.error('Error fetching products:', error)
   }
+
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -42,11 +57,12 @@ export default async function ProductsPage() {
         <CardHeader>
           <CardTitle>Lista de Productos</CardTitle>
           <CardDescription>
-            {products?.length || 0} productos registrados
+            {count || 0} productos registrados
           </CardDescription>
         </CardHeader>
         <CardContent>
           <ProductsTable products={products || []} />
+          <Pagination page={page} totalPages={totalPages} basePath="/produccion/productos" />
         </CardContent>
       </Card>
     </div>

@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Category, Unit } from '@/utils/types/database.types'
+import { createSupply } from '@/app/actions'
 
 interface SupplyFormProps {
   categories: Category[]
@@ -13,8 +13,8 @@ interface SupplyFormProps {
 
 export function SupplyForm({ categories, units }: SupplyFormProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -28,21 +28,17 @@ export function SupplyForm({ categories, units }: SupplyFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
-    try {
-      const { error } = await supabase
-        .from('supplies')
-        .insert([formData])
+    const result = await createSupply(formData)
 
-      if (error) throw error
-
-      router.push('/inventario/insumos')
-      router.refresh()
-    } catch (error: any) {
-      alert('Error al crear insumo: ' + error.message)
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/inventario/insumos')
   }
 
   return (
@@ -161,6 +157,8 @@ export function SupplyForm({ categories, units }: SupplyFormProps) {
           Insumo activo
         </label>
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-4">
         <Button type="submit" disabled={loading}>

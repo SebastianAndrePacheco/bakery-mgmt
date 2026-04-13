@@ -88,39 +88,29 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
       
       const total = totalWithIGV
 
-      // Generar número de orden
       const orderNumber = `OC-${Date.now()}`
 
-      // Crear orden de compra
-      const { data: order, error: orderError } = await supabase
-        .from('purchase_orders')
-        .insert([{
-          ...formData,
-          order_number: orderNumber,
-          subtotal,
-          tax,
-          total,
-          status: 'pendiente',
-        }])
-        .select()
-        .single()
-
-      if (orderError) throw orderError
-
-      // Crear items de la orden
-      const orderItems = validItems.map(item => ({
-        purchase_order_id: order.id,
-        supply_id: item.supply_id,
-        quantity: item.quantity,
+      const itemsPayload = validItems.map(item => ({
+        supply_id:  item.supply_id,
+        quantity:   item.quantity,
         unit_price: item.unit_price,
-        total: item.total,
+        total:      item.total,
       }))
 
-      const { error: itemsError } = await supabase
-        .from('purchase_order_items')
-        .insert(orderItems)
+      // Llamada atómica: orden + ítems en una sola transacción
+      const { error } = await supabase.rpc('create_purchase_order_with_items', {
+        p_supplier_id:             formData.supplier_id,
+        p_order_date:              formData.order_date,
+        p_expected_delivery_date:  formData.expected_delivery_date,
+        p_notes:                   formData.notes,
+        p_order_number:            orderNumber,
+        p_subtotal:                subtotal,
+        p_tax:                     tax,
+        p_total:                   total,
+        p_items:                   itemsPayload,
+      })
 
-      if (itemsError) throw itemsError
+      if (error) throw error
 
       router.push('/compras/ordenes')
       router.refresh()

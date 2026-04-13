@@ -1,46 +1,60 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { SuppliesTable } from '@/components/tables/supplies-table'
 
-export default async function SuppliesPage() {
+const PAGE_SIZE = 20
+
+export default async function SuppliesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, parseInt(pageParam || '1'))
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
   const supabase = await createClient()
-  
-  const { data: supplies, error } = await supabase
+
+  const { data: supplies, count, error } = await supabase
     .from('supplies')
     .select(`
       *,
       category:categories(id, name, type),
       unit:units(id, name, symbol)
-    `)
+    `, { count: 'exact' })
     .order('name', { ascending: true })
+    .range(from, to)
 
   if (error) {
     console.error('Error fetching supplies:', error)
   }
 
-  // Obtener stock actual de cada insumo sumando los lotes disponibles
-  const suppliesWithStock = await Promise.all(
-    (supplies || []).map(async (supply) => {
-      const { data: batches } = await supabase
+  // Obtener stock de todos los insumos de la página en una sola consulta (evita N+1)
+  const supplyIds = (supplies || []).map(s => s.id)
+  const { data: batchTotals } = supplyIds.length > 0
+    ? await supabase
         .from('supply_batches')
-        .select('current_quantity')
-        .eq('supply_id', supply.id)
+        .select('supply_id, current_quantity')
+        .in('supply_id', supplyIds)
         .eq('status', 'disponible')
+    : { data: [] }
 
-      const currentStock = batches?.reduce(
-        (sum, batch) => sum + (batch.current_quantity || 0), 
-        0
-      ) || 0
+  const stockMap = (batchTotals || []).reduce<Record<string, number>>((acc, b) => {
+    acc[b.supply_id] = (acc[b.supply_id] || 0) + b.current_quantity
+    return acc
+  }, {})
 
-      return {
-        ...supply,
-        current_stock: currentStock
-      }
-    })
-  )
+  const suppliesWithStock = (supplies || []).map(s => ({
+    ...s,
+    current_stock: stockMap[s.id] || 0,
+  }))
+
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -63,11 +77,12 @@ export default async function SuppliesPage() {
         <CardHeader>
           <CardTitle>Lista de Insumos</CardTitle>
           <CardDescription>
-            {supplies?.length || 0} insumos registrados
+            {count || 0} insumos registrados
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SuppliesTable supplies={suppliesWithStock || []} />
+          <SuppliesTable supplies={suppliesWithStock} />
+          <Pagination page={page} totalPages={totalPages} basePath="/inventario/insumos" />
         </CardContent>
       </Card>
     </div>

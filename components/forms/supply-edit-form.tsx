@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Category, Unit, Supply } from '@/utils/types/database.types'
+import { updateSupply } from '@/app/actions'
 
 interface SupplyEditFormProps {
   supply: Supply
@@ -14,8 +14,8 @@ interface SupplyEditFormProps {
 
 export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     code: supply.code,
     name: supply.name,
@@ -29,22 +29,17 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
-    try {
-      const { error } = await supabase
-        .from('supplies')
-        .update(formData)
-        .eq('id', supply.id)
+    const result = await updateSupply(supply.id, formData)
 
-      if (error) throw error
-
-      router.push('/inventario/insumos')
-      router.refresh()
-    } catch (error: any) {
-      alert('Error al actualizar insumo: ' + error.message)
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/inventario/insumos')
   }
 
   return (
@@ -160,6 +155,8 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
           Insumo activo
         </label>
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-4">
         <Button type="submit" disabled={loading}>

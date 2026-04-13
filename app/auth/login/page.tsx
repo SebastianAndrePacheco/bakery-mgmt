@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { loginUser } from '@/app/actions'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,30 +12,22 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+    const result = await loginUser(email, password)
 
-      if (error) throw error
-
-      if (data.user) {
-        router.push('/dashboard')
-        router.refresh()
-      }
-    } catch (error: any) {
-      setError(error.message || 'Error al iniciar sesión')
-    } finally {
+    if ('error' in result) {
+      setError(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/dashboard')
+    router.refresh()
   }
 
   return (
@@ -95,11 +87,6 @@ export default function LoginPage() {
             {loading ? 'Ingresando...' : 'Ingresar'}
           </Button>
         </form>
-
-        <div className="mt-4 text-center text-sm text-muted-foreground">
-          <p>Bienvenido</p>
-          <p></p>
-        </div>
       </CardContent>
     </Card>
   )
