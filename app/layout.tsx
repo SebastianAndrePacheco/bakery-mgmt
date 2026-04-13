@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Bakery Management System",
-  description: "Sistema de gestión integral para panaderías",
+  title: "Panificadora Ofelia E.I.R.L.",
+  description: "Sistema de gestión — Panificadora Ofelia E.I.R.L.",
 };
 
 export default function RootLayout({
