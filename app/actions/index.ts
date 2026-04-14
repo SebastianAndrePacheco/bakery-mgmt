@@ -74,9 +74,13 @@ const RecipeItemSchema = z.object({
   notes: z.string().max(300).optional().or(z.literal('')),
 })
 
+const today = () => new Date().toISOString().split('T')[0]
+
 const ProductionOrderSchema = z.object({
   product_id: uuid,
-  scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  scheduled_date: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
+    .refine(d => d >= today(), 'La fecha no puede ser en el pasado'),
   quantity_planned: z.number().positive('La cantidad debe ser mayor a 0'),
   order_type: z.enum(['programada', 'especial']),
   notes: z.string().max(500).optional().or(z.literal('')),

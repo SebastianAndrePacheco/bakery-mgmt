@@ -12,9 +12,12 @@
 
 -- =====================================================
 -- FUNCIÓN HELPER: obtener el rol del usuario actual
+-- Usada en las políticas RLS de todas las tablas
 -- STABLE = el resultado se cachea por transacción (performance)
+-- NOTA: se crea en schema public porque Supabase SQL Editor
+--       no permite crear funciones en el schema auth.
 -- =====================================================
-CREATE OR REPLACE FUNCTION auth.user_role()
+CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS TEXT
 LANGUAGE SQL
 SECURITY DEFINER
@@ -52,15 +55,15 @@ CREATE POLICY "categories_read" ON categories
   FOR SELECT TO authenticated USING (true);
 
 CREATE POLICY "categories_write" ON categories
-  FOR INSERT TO authenticated WITH CHECK (auth.user_role() = 'admin');
+  FOR INSERT TO authenticated WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "categories_update" ON categories
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "categories_delete" ON categories
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -71,15 +74,15 @@ CREATE POLICY "units_read" ON units
   FOR SELECT TO authenticated USING (true);
 
 CREATE POLICY "units_write" ON units
-  FOR INSERT TO authenticated WITH CHECK (auth.user_role() = 'admin');
+  FOR INSERT TO authenticated WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "units_update" ON units
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "units_delete" ON units
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -88,19 +91,19 @@ CREATE POLICY "units_delete" ON units
 -- =====================================================
 CREATE POLICY "suppliers_read" ON suppliers
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "suppliers_write" ON suppliers
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "suppliers_update" ON suppliers
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "suppliers_delete" ON suppliers
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -109,19 +112,19 @@ CREATE POLICY "suppliers_delete" ON suppliers
 -- =====================================================
 CREATE POLICY "supplies_read" ON supplies
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "supplies_write" ON supplies
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "supplies_update" ON supplies
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "supplies_delete" ON supplies
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -130,19 +133,19 @@ CREATE POLICY "supplies_delete" ON supplies
 -- =====================================================
 CREATE POLICY "supply_batches_read" ON supply_batches
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "supply_batches_write" ON supply_batches
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "supply_batches_update" ON supply_batches
   FOR UPDATE TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'))
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'))
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "supply_batches_delete" ON supply_batches
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -154,15 +157,15 @@ CREATE POLICY "products_read" ON products
 
 CREATE POLICY "products_write" ON products
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "products_update" ON products
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "products_delete" ON products
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -171,19 +174,19 @@ CREATE POLICY "products_delete" ON products
 -- =====================================================
 CREATE POLICY "product_recipes_read" ON product_recipes
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "product_recipes_write" ON product_recipes
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "product_recipes_update" ON product_recipes
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "product_recipes_delete" ON product_recipes
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -193,19 +196,19 @@ CREATE POLICY "product_recipes_delete" ON product_recipes
 -- =====================================================
 CREATE POLICY "production_orders_read" ON production_orders
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_orders_write" ON production_orders
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_orders_update" ON production_orders
   FOR UPDATE TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'))
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'))
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_orders_delete" ON production_orders
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -214,19 +217,19 @@ CREATE POLICY "production_orders_delete" ON production_orders
 -- =====================================================
 CREATE POLICY "production_order_items_read" ON production_order_items
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_order_items_write" ON production_order_items
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_order_items_update" ON production_order_items
   FOR UPDATE TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'))
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'))
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_order_items_delete" ON production_order_items
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -239,15 +242,15 @@ CREATE POLICY "production_batches_read" ON production_batches
 
 CREATE POLICY "production_batches_write" ON production_batches
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_batches_update" ON production_batches
   FOR UPDATE TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'))
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'))
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "production_batches_delete" ON production_batches
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -256,19 +259,19 @@ CREATE POLICY "production_batches_delete" ON production_batches
 -- =====================================================
 CREATE POLICY "purchase_orders_read" ON purchase_orders
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "purchase_orders_write" ON purchase_orders
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "purchase_orders_update" ON purchase_orders
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "purchase_orders_delete" ON purchase_orders
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -277,19 +280,19 @@ CREATE POLICY "purchase_orders_delete" ON purchase_orders
 -- =====================================================
 CREATE POLICY "purchase_order_items_read" ON purchase_order_items
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "purchase_order_items_write" ON purchase_order_items
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "purchase_order_items_update" ON purchase_order_items
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "purchase_order_items_delete" ON purchase_order_items
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -298,19 +301,19 @@ CREATE POLICY "purchase_order_items_delete" ON purchase_order_items
 -- =====================================================
 CREATE POLICY "inventory_movements_read" ON inventory_movements
   FOR SELECT TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "inventory_movements_write" ON inventory_movements
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "inventory_movements_update" ON inventory_movements
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin')
-  WITH CHECK (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin')
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "inventory_movements_delete" ON inventory_movements
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -321,18 +324,18 @@ CREATE POLICY "inventory_movements_delete" ON inventory_movements
 CREATE POLICY "user_profiles_read" ON user_profiles
   FOR SELECT TO authenticated
   USING (
-    auth.user_role() = 'admin' OR id = auth.uid()
+    public.get_user_role() = 'admin' OR id = auth.uid()
   );
 
 CREATE POLICY "user_profiles_write" ON user_profiles
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() = 'admin');
+  WITH CHECK (public.get_user_role() = 'admin');
 
 CREATE POLICY "user_profiles_update" ON user_profiles
   FOR UPDATE TO authenticated
-  USING (auth.user_role() = 'admin' OR id = auth.uid())
+  USING (public.get_user_role() = 'admin' OR id = auth.uid())
   WITH CHECK (
-    auth.user_role() = 'admin'
+    public.get_user_role() = 'admin'
     OR (
       id = auth.uid()
       AND role = (SELECT role FROM user_profiles WHERE id = auth.uid())
@@ -340,7 +343,7 @@ CREATE POLICY "user_profiles_update" ON user_profiles
   );
 
 CREATE POLICY "user_profiles_delete" ON user_profiles
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -348,7 +351,7 @@ CREATE POLICY "user_profiles_delete" ON user_profiles
 -- =====================================================
 CREATE POLICY "audit_logs_read" ON audit_logs
   FOR SELECT TO authenticated
-  USING (auth.user_role() = 'admin');
+  USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -360,15 +363,15 @@ CREATE POLICY "alerts_read" ON alerts
 
 CREATE POLICY "alerts_write" ON alerts
   FOR INSERT TO authenticated
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "alerts_update" ON alerts
   FOR UPDATE TO authenticated
-  USING (auth.user_role() IN ('admin', 'panadero'))
-  WITH CHECK (auth.user_role() IN ('admin', 'panadero'));
+  USING (public.get_user_role() IN ('admin', 'panadero'))
+  WITH CHECK (public.get_user_role() IN ('admin', 'panadero'));
 
 CREATE POLICY "alerts_delete" ON alerts
-  FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
+  FOR DELETE TO authenticated USING (public.get_user_role() = 'admin');
 
 
 -- =====================================================
@@ -406,7 +409,7 @@ DECLARE
   v_order             RECORD;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'No autorizado'; END IF;
-  IF auth.user_role() NOT IN ('admin') THEN
+  IF public.get_user_role() NOT IN ('admin') THEN
     RAISE EXCEPTION 'Se requiere rol admin para recibir órdenes de compra';
   END IF;
 
@@ -490,7 +493,7 @@ DECLARE
   v_item     JSONB;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'No autorizado'; END IF;
-  IF auth.user_role() NOT IN ('admin') THEN
+  IF public.get_user_role() NOT IN ('admin') THEN
     RAISE EXCEPTION 'Se requiere rol admin para crear órdenes de compra';
   END IF;
 
@@ -549,7 +552,7 @@ DECLARE
   v_expiration_date  DATE;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'No autorizado'; END IF;
-  IF auth.user_role() NOT IN ('admin', 'panadero') THEN
+  IF public.get_user_role() NOT IN ('admin', 'panadero') THEN
     RAISE EXCEPTION 'Se requiere rol admin o panadero para registrar producción';
   END IF;
 
@@ -651,6 +654,7 @@ END;
 $$;
 
 -- record_inventory_adjustment → admin + panadero
+-- NOTA: versión completa con creación de lotes para ajustes positivos
 CREATE OR REPLACE FUNCTION record_inventory_adjustment(
   p_entity_type     TEXT,
   p_entity_id       UUID,
@@ -659,7 +663,8 @@ CREATE OR REPLACE FUNCTION record_inventory_adjustment(
   p_reason          TEXT,
   p_notes           TEXT,
   p_movement_date   DATE,
-  p_unit_id         UUID
+  p_unit_id         UUID,
+  p_unit_price      DECIMAL DEFAULT 0
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -673,9 +678,12 @@ DECLARE
   v_new_qty         DECIMAL;
   v_total_stock     DECIMAL;
   v_movement_reason movement_reason;
+  v_batch_id        UUID;
+  v_batch_code      TEXT;
+  v_total_cost      DECIMAL;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'No autorizado'; END IF;
-  IF auth.user_role() NOT IN ('admin', 'panadero') THEN
+  IF public.get_user_role() NOT IN ('admin', 'panadero') THEN
     RAISE EXCEPTION 'Se requiere rol admin o panadero para registrar ajustes';
   END IF;
 
@@ -685,6 +693,10 @@ BEGIN
     ELSE 'ajuste_inventario'::movement_reason
   END;
 
+  v_total_cost := p_quantity * COALESCE(p_unit_price, 0);
+  v_batch_code := 'AJ-' || to_char(p_movement_date, 'YYYYMMDD') || '-' || substring(gen_random_uuid()::text, 1, 8);
+
+  -- Verificar stock antes de salida
   IF p_adjustment_type = 'salida' THEN
     IF p_entity_type = 'insumo' THEN
       SELECT COALESCE(SUM(current_quantity), 0) INTO v_total_stock
@@ -698,17 +710,47 @@ BEGIN
     END IF;
   END IF;
 
+  -- Crear lote para ajustes positivos
+  IF p_adjustment_type = 'entrada' THEN
+    IF p_entity_type = 'insumo' THEN
+      INSERT INTO supply_batches (
+        supply_id, batch_code,
+        quantity_received, unit_price, total_cost,
+        received_date, current_quantity, status, created_by
+      ) VALUES (
+        p_entity_id, v_batch_code,
+        p_quantity, COALESCE(p_unit_price, 0), v_total_cost,
+        p_movement_date, p_quantity, 'disponible', auth.uid()
+      ) RETURNING id INTO v_batch_id;
+    ELSE
+      INSERT INTO production_batches (
+        product_id, batch_code,
+        quantity_produced, current_quantity,
+        production_date, unit_cost, total_cost, status
+      ) VALUES (
+        p_entity_id, v_batch_code,
+        p_quantity, p_quantity,
+        p_movement_date, COALESCE(p_unit_price, 0), v_total_cost, 'disponible'
+      ) RETURNING id INTO v_batch_id;
+    END IF;
+  END IF;
+
+  -- Registrar en kardex
   INSERT INTO inventory_movements (
     movement_type, movement_reason, entity_type, entity_id,
-    quantity, unit_id, notes, movement_date, created_by
+    batch_id, quantity, unit_id, unit_cost, total_cost,
+    notes, movement_date, created_by
   ) VALUES (
     p_adjustment_type::movement_type, v_movement_reason,
     p_entity_type::entity_type, p_entity_id,
+    v_batch_id,
     p_quantity, p_unit_id,
+    COALESCE(p_unit_price, 0), v_total_cost,
     format('Ajuste - %s: %s', p_reason, COALESCE(NULLIF(p_notes, ''), 'Sin observaciones')),
     p_movement_date, auth.uid()
   );
 
+  -- Descontar FIFO en salidas
   IF p_adjustment_type = 'salida' THEN
     v_remaining := p_quantity;
     IF p_entity_type = 'insumo' THEN
@@ -738,5 +780,59 @@ BEGIN
 
   RETURN jsonb_build_object('success', true);
 EXCEPTION WHEN OTHERS THEN RAISE;
+END;
+$$;
+
+
+-- =====================================================
+-- AUDIT LOGGING — Triggers automáticos
+-- Registra INSERT, UPDATE, DELETE en tablas críticas.
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION audit_trigger_fn()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  BEGIN
+    v_user_id := (current_setting('request.jwt.claims', true)::jsonb->>'sub')::UUID;
+  EXCEPTION WHEN OTHERS THEN
+    v_user_id := NULL;
+  END;
+
+  INSERT INTO audit_logs (table_name, record_id, action, old_data, new_data, user_id)
+  VALUES (
+    TG_TABLE_NAME,
+    CASE TG_OP WHEN 'DELETE' THEN OLD.id ELSE NEW.id END,
+    TG_OP,
+    CASE TG_OP WHEN 'INSERT' THEN NULL ELSE to_jsonb(OLD) END,
+    CASE TG_OP WHEN 'DELETE' THEN NULL ELSE to_jsonb(NEW) END,
+    v_user_id
+  );
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+-- Aplicar a tablas críticas
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'suppliers', 'supplies', 'products', 'product_recipes',
+    'purchase_orders', 'production_orders', 'user_profiles'
+  ] LOOP
+    EXECUTE format(
+      'DROP TRIGGER IF EXISTS audit_%1$s ON %1$s;
+       CREATE TRIGGER audit_%1$s
+       AFTER INSERT OR UPDATE OR DELETE ON %1$s
+       FOR EACH ROW EXECUTE FUNCTION audit_trigger_fn();',
+      t
+    );
+  END LOOP;
 END;
 $$;

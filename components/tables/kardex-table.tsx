@@ -1,7 +1,8 @@
 'use client'
 
 import { InventoryMovement, Unit } from '@/utils/types/database.types'
-import { ArrowDown, ArrowUp, RefreshCw, Calendar, Package } from 'lucide-react'
+import { ArrowDown, ArrowUp, Calendar, Package } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatCurrency } from '@/utils/helpers/currency'
 import { formatDate } from '@/utils/helpers/dates'
 
@@ -10,144 +11,140 @@ interface MovementWithDetails extends InventoryMovement {
   entity_name?: string
 }
 
-interface KardexTableProps {
-  movements: MovementWithDetails[]
-}
-
-const movementTypeIcons = {
-  entrada: <ArrowDown className="w-4 h-4 text-green-600" />,
-  salida: <ArrowUp className="w-4 h-4 text-red-600" />,
-  ajuste: <RefreshCw className="w-4 h-4 text-blue-600" />,
-}
-
-const movementTypeColors = {
-  entrada: 'bg-green-50 text-green-700 border-green-200',
-  salida: 'bg-red-50 text-red-700 border-red-200',
-  ajuste: 'bg-blue-50 text-blue-700 border-blue-200',
-}
-
-const movementTypeLabels = {
-  entrada: 'Entrada',
-  salida: 'Salida',
-  ajuste: 'Ajuste',
-}
-
-const movementReasonLabels = {
+const movementReasonLabels: Record<string, string> = {
   compra: 'Compra',
   produccion: 'Producción',
   merma: 'Merma',
   vencimiento: 'Vencimiento',
-  ajuste_inventario: 'Ajuste Inventario',
+  ajuste_inventario: 'Ajuste',
   devolucion_proveedor: 'Devolución',
-  venta_manual: 'Venta Manual',
+  venta_manual: 'Venta',
 }
 
-export function KardexTable({ movements }: KardexTableProps) {
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="text-center py-10 text-sm text-slate-400">
+      Sin {label} registradas
+    </div>
+  )
+}
+
+function KardexMiniTable({
+  movements,
+  type,
+}: {
+  movements: MovementWithDetails[]
+  type: 'entrada' | 'salida'
+}) {
   if (movements.length === 0) {
-    return (
-      <div className="text-center py-16 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-        <div className="text-5xl mb-4">📊</div>
-        <p className="text-lg font-medium text-slate-700">No hay movimientos registrados</p>
-        <p className="text-sm text-slate-500 mt-2">
-          Los movimientos aparecerán aquí cuando recibas órdenes o registres producción
-        </p>
-      </div>
-    )
+    return <EmptyState label={type === 'entrada' ? 'entradas' : 'salidas'} />
   }
 
+  const amountColor = type === 'entrada' ? 'text-green-600' : 'text-red-600'
+  const sign = type === 'entrada' ? '+' : '-'
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full">
-        <thead className="bg-slate-50">
-          <tr>
-            <th className="text-left py-3 px-4 font-semibold text-sm text-slate-700">
-              Fecha
-            </th>
-            <th className="text-left py-3 px-4 font-semibold text-sm text-slate-700">
-              Tipo
-            </th>
-            <th className="text-left py-3 px-4 font-semibold text-sm text-slate-700">
-              Motivo
-            </th>
-            <th className="text-left py-3 px-4 font-semibold text-sm text-slate-700">
-              Artículo
-            </th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-slate-700">
-              Cantidad
-            </th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-slate-700">
-              Costo Total
-            </th>
-            <th className="text-left py-3 px-4 font-semibold text-sm text-slate-700">
-              Notas
-            </th>
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-100">
+            <th className="text-left py-2 px-3 font-semibold text-slate-600">Fecha</th>
+            <th className="text-left py-2 px-3 font-semibold text-slate-600">Artículo</th>
+            <th className="text-left py-2 px-3 font-semibold text-slate-600">Motivo</th>
+            <th className="text-right py-2 px-3 font-semibold text-slate-600">Cant.</th>
+            <th className="text-right py-2 px-3 font-semibold text-slate-600">Costo</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
-          {movements.map((movement) => (
-            <tr key={movement.id} className="hover:bg-slate-50 transition-colors">
-              <td className="py-4 px-4">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <Calendar className="w-4 h-4 text-slate-400" />
-                  {formatDate(movement.movement_date)}
-                </div>
+        <tbody className="divide-y divide-slate-50">
+          {movements.map((m) => (
+            <tr key={m.id} className="hover:bg-slate-50 transition-colors">
+              <td className="py-2 px-3 whitespace-nowrap text-slate-500">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  {formatDate(m.movement_date)}
+                </span>
               </td>
-              <td className="py-4 px-4">
-                <div className="flex items-center gap-2">
-                  {movementTypeIcons[movement.movement_type]}
-                  <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                      movementTypeColors[movement.movement_type]
-                    }`}
-                  >
-                    {movementTypeLabels[movement.movement_type]}
+              <td className="py-2 px-3">
+                <div className="flex items-center gap-1">
+                  <Package className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                  <span className="font-medium text-slate-900 truncate max-w-[140px]" title={m.entity_name}>
+                    {m.entity_name}
                   </span>
                 </div>
               </td>
-              <td className="py-4 px-4">
-                <span className="text-sm text-slate-600">
-                  {movementReasonLabels[movement.movement_reason]}
-                </span>
+              <td className="py-2 px-3 text-slate-500 whitespace-nowrap">
+                {movementReasonLabels[m.movement_reason] ?? m.movement_reason}
               </td>
-              <td className="py-4 px-4">
-                <div className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-slate-400" />
-                  <div>
-                    <div className="font-medium text-slate-900">
-                      {movement.entity_name}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {movement.entity_type === 'insumo' ? 'Insumo' : 'Producto'}
-                    </div>
-                  </div>
-                </div>
+              <td className={`py-2 px-3 text-right font-semibold whitespace-nowrap ${amountColor}`}>
+                {sign}{m.quantity} {(m.unit as unknown as { symbol: string })?.symbol}
               </td>
-              <td className="py-4 px-4 text-right">
-                <span className={`font-semibold ${
-                  movement.movement_type === 'entrada' 
-                    ? 'text-green-600' 
-                    : movement.movement_type === 'salida'
-                    ? 'text-red-600'
-                    : 'text-blue-600'
-                }`}>
-                  {movement.movement_type === 'entrada' ? '+' : movement.movement_type === 'salida' ? '-' : '±'}
-                  {movement.quantity} {movement.unit?.symbol}
-                </span>
-              </td>
-              <td className="py-4 px-4 text-right">
-                <span className="font-semibold text-slate-900">
-                  {movement.total_cost ? formatCurrency(movement.total_cost) : '-'}
-                </span>
-              </td>
-              <td className="py-4 px-4">
-                <span className="text-sm text-slate-600">
-                  {movement.notes || '-'}
-                </span>
+              <td className="py-2 px-3 text-right text-slate-700 whitespace-nowrap">
+                {m.total_cost ? formatCurrency(m.total_cost) : '-'}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+interface KardexColumnsProps {
+  entradas: MovementWithDetails[]
+  salidasInsumo: MovementWithDetails[]
+  salidasProducto: MovementWithDetails[]
+}
+
+export function KardexColumns({ entradas, salidasInsumo, salidasProducto }: KardexColumnsProps) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Entradas */}
+      <Card className="border-green-200">
+        <CardHeader className="pb-3 bg-green-50 rounded-t-lg border-b border-green-100">
+          <div className="flex items-center gap-2">
+            <ArrowDown className="w-4 h-4 text-green-600" />
+            <CardTitle className="text-base text-green-800">Entradas</CardTitle>
+          </div>
+          <CardDescription className="text-green-700">
+            {entradas.length} movimiento{entradas.length !== 1 ? 's' : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <KardexMiniTable movements={entradas} type="entrada" />
+        </CardContent>
+      </Card>
+
+      {/* Salidas — Insumos */}
+      <Card className="border-red-200">
+        <CardHeader className="pb-3 bg-red-50 rounded-t-lg border-b border-red-100">
+          <div className="flex items-center gap-2">
+            <ArrowUp className="w-4 h-4 text-red-600" />
+            <CardTitle className="text-base text-red-800">Salidas — Insumos</CardTitle>
+          </div>
+          <CardDescription className="text-red-700">
+            {salidasInsumo.length} movimiento{salidasInsumo.length !== 1 ? 's' : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <KardexMiniTable movements={salidasInsumo} type="salida" />
+        </CardContent>
+      </Card>
+
+      {/* Salidas — Productos */}
+      <Card className="border-orange-200">
+        <CardHeader className="pb-3 bg-orange-50 rounded-t-lg border-b border-orange-100">
+          <div className="flex items-center gap-2">
+            <ArrowUp className="w-4 h-4 text-orange-600" />
+            <CardTitle className="text-base text-orange-800">Salidas — Productos</CardTitle>
+          </div>
+          <CardDescription className="text-orange-700">
+            {salidasProducto.length} movimiento{salidasProducto.length !== 1 ? 's' : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <KardexMiniTable movements={salidasProducto} type="salida" />
+        </CardContent>
+      </Card>
     </div>
   )
 }

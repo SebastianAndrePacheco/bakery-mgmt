@@ -20,17 +20,28 @@ export function Header() {
   const [bellOpen, setBellOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
+  const [userName, setUserName] = useState('')
+  const [userRole, setUserRole] = useState('')
   const bellRef = useRef<HTMLDivElement>(null)
 
+  const ROLE_LABELS: Record<string, string> = {
+    admin: 'Administrador',
+    panadero: 'Panadero',
+    cajero: 'Cajero',
+  }
+
   useEffect(() => {
-    const fetchNotifications = async () => {
+    const fetchAll = async () => {
       const today = new Date().toISOString().split('T')[0]
       const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+
+      const { data: { user } } = await supabase.auth.getUser()
 
       const [
         { data: expired },
         { data: expiring },
         { data: pendingOrders },
+        { data: profile },
       ] = await Promise.all([
         supabase.from('supply_batches')
           .select('id')
@@ -48,7 +59,15 @@ export function Header() {
         supabase.from('purchase_orders')
           .select('id')
           .in('status', ['pendiente', 'enviado']),
+        user
+          ? supabase.from('user_profiles').select('full_name, role').eq('id', user.id).single()
+          : Promise.resolve({ data: null }),
       ])
+
+      if (profile) {
+        setUserName(profile.full_name || '')
+        setUserRole(profile.role || '')
+      }
 
       const notifs: Notification[] = []
 
@@ -83,7 +102,7 @@ export function Header() {
       setLoading(false)
     }
 
-    fetchNotifications()
+    fetchAll()
   }, [])
 
   useEffect(() => {
@@ -177,8 +196,10 @@ export function Header() {
         {/* Usuario */}
         <div className="flex items-center gap-2">
           <div className="text-right">
-            <p className="text-sm font-medium">Admin User</p>
-            <p className="text-xs text-muted-foreground">Administrador</p>
+            <p className="text-sm font-medium">{userName || '—'}</p>
+            <p className="text-xs text-muted-foreground">
+              {ROLE_LABELS[userRole] || userRole || '—'}
+            </p>
           </div>
           <Button variant="ghost" size="icon">
             <User className="w-5 h-5" />
