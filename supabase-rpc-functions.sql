@@ -406,12 +406,21 @@ GRANT EXECUTE ON FUNCTION create_purchase_order_with_items(
 
 
 -- =====================================================
+-- MIGRATION: Permitir ajustes de inventario sin proveedor
+-- Hacer supplier_id nullable en supply_batches para soportar
+-- lotes creados por ajuste manual (sin orden de compra).
+-- =====================================================
+ALTER TABLE supply_batches ALTER COLUMN supplier_id DROP NOT NULL;
+
+
+-- =====================================================
 -- 4. REGISTRAR AJUSTE DE INVENTARIO (Atómico)
 --    Tablas: inventory_movements + supply_batches / production_batches
 --
--- NOTA: Los ajustes positivos ('entrada') solo registran
--- en el kardex. Para impactar stock real se debe crear un
--- lote manualmente desde el módulo de compras/producción.
+-- Ajustes positivos ('entrada'): crea un nuevo lote en supply_batches
+--   o production_batches y registra en el kardex.
+-- Ajustes negativos ('salida'): descuenta de lotes FIFO y registra
+--   en el kardex.
 -- =====================================================
 CREATE OR REPLACE FUNCTION record_inventory_adjustment(
   p_entity_type     TEXT,     -- 'insumo' | 'producto'
@@ -421,7 +430,8 @@ CREATE OR REPLACE FUNCTION record_inventory_adjustment(
   p_reason          TEXT,     -- 'merma' | 'vencimiento' | 'correccion' | 'robo' | 'otro'
   p_notes           TEXT,
   p_movement_date   DATE,
-  p_unit_id         UUID
+  p_unit_id         UUID,
+  p_unit_price      DECIMAL DEFAULT 0  -- costo unitario para ajustes positivos
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -435,6 +445,9 @@ DECLARE
   v_new_qty         DECIMAL;
   v_total_stock     DECIMAL;
   v_movement_reason movement_reason;
+  v_batch_id        UUID;
+  v_batch_code      TEXT;
+  v_total_cost      DECIMAL;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'No autorizado';
@@ -446,6 +459,9 @@ BEGIN
     WHEN 'vencimiento' THEN 'vencimiento'::movement_reason
     ELSE 'ajuste_inventario'::movement_reason
   END;
+
+  v_total_cost := p_quantity * COALESCE(p_unit_price, 0);
+  v_batch_code := 'AJ-' || to_char(p_movement_date, 'YYYYMMDD') || '-' || substring(gen_random_uuid()::text, 1, 8);
 
   -- Verificar stock disponible antes de registrar salida
   IF p_adjustment_type = 'salida' THEN
@@ -464,16 +480,44 @@ BEGIN
     END IF;
   END IF;
 
+  -- Para ajustes positivos: crear lote de stock
+  IF p_adjustment_type = 'entrada' THEN
+    IF p_entity_type = 'insumo' THEN
+      INSERT INTO supply_batches (
+        supply_id, batch_code,
+        quantity_received, unit_price, total_cost,
+        received_date, current_quantity, status, created_by
+      ) VALUES (
+        p_entity_id, v_batch_code,
+        p_quantity, COALESCE(p_unit_price, 0), v_total_cost,
+        p_movement_date, p_quantity, 'disponible', auth.uid()
+      ) RETURNING id INTO v_batch_id;
+    ELSE
+      INSERT INTO production_batches (
+        product_id, batch_code,
+        quantity_produced, current_quantity,
+        production_date, unit_cost, total_cost, status
+      ) VALUES (
+        p_entity_id, v_batch_code,
+        p_quantity, p_quantity,
+        p_movement_date, COALESCE(p_unit_price, 0), v_total_cost, 'disponible'
+      ) RETURNING id INTO v_batch_id;
+    END IF;
+  END IF;
+
   -- Registrar movimiento en kardex
   INSERT INTO inventory_movements (
     movement_type, movement_reason, entity_type, entity_id,
-    quantity, unit_id, notes, movement_date, created_by
+    batch_id, quantity, unit_id, unit_cost, total_cost,
+    notes, movement_date, created_by
   ) VALUES (
     p_adjustment_type::movement_type,
     v_movement_reason,
     p_entity_type::entity_type,
     p_entity_id,
+    v_batch_id,
     p_quantity, p_unit_id,
+    COALESCE(p_unit_price, 0), v_total_cost,
     format('Ajuste - %s: %s', p_reason, COALESCE(NULLIF(p_notes, ''), 'Sin observaciones')),
     p_movement_date, auth.uid()
   );
@@ -522,5 +566,5 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION record_inventory_adjustment(
-  TEXT, UUID, TEXT, DECIMAL, TEXT, TEXT, DATE, UUID
+  TEXT, UUID, TEXT, DECIMAL, TEXT, TEXT, DATE, UUID, DECIMAL
 ) TO authenticated;

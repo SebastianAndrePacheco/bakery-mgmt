@@ -100,7 +100,7 @@ CREATE TABLE supplies (
 CREATE TABLE supply_batches (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   supply_id UUID NOT NULL REFERENCES supplies(id),
-  supplier_id UUID NOT NULL REFERENCES suppliers(id),
+  supplier_id UUID REFERENCES suppliers(id),
   purchase_order_id UUID,
   batch_code TEXT NOT NULL,
   quantity_received DECIMAL(10, 3) NOT NULL,

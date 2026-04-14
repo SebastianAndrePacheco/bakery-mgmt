@@ -21,6 +21,7 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
     entity_id: '',
     adjustment_type: 'salida',
     quantity: '',
+    unit_price: '',
     reason: 'merma',
     notes: '',
     movement_date: new Date().toISOString().split('T')[0],
@@ -33,11 +34,25 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (!formData.entity_id) {
+      alert('Por favor selecciona un ' + (formData.entity_type === 'insumo' ? 'insumo' : 'producto'))
+      return
+    }
+
+    const quantity = parseFloat(formData.quantity)
+    if (!quantity || quantity <= 0) {
+      alert('La cantidad debe ser mayor a cero')
+      return
+    }
+
+    const unitPrice = formData.adjustment_type === 'entrada' ? parseFloat(formData.unit_price) || 0 : 0
+
     const confirm = window.confirm(
       `⚠️ ¿Confirmar ajuste de inventario?\n\n` +
       `Tipo: ${formData.adjustment_type === 'entrada' ? 'POSITIVO (+)' : 'NEGATIVO (-)'}\n` +
       `${formData.entity_type === 'insumo' ? 'Insumo' : 'Producto'}: ${selectedEntity?.name}\n` +
-      `Cantidad: ${formData.quantity} ${selectedEntity?.unit?.symbol}\n` +
+      `Cantidad: ${quantity} ${selectedEntity?.unit?.symbol}\n` +
+      (formData.adjustment_type === 'entrada' && unitPrice > 0 ? `Costo unitario: S/ ${unitPrice.toFixed(4)}\n` : '') +
       `Motivo: ${formData.reason}\n\n` +
       `Este movimiento se registrará en el kardex.`
     )
@@ -47,14 +62,10 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
     setLoading(true)
 
     try {
-      const quantity = parseFloat(formData.quantity)
-
       if (!selectedEntity?.unit_id) {
         throw new Error('No se pudo obtener la unidad del elemento seleccionado')
       }
 
-      // Llamada atómica: kardex + actualización FIFO de lotes en una sola transacción
-      // El movimiento_reason se mapea correctamente al ENUM en la función SQL
       const { error } = await supabase.rpc('record_inventory_adjustment', {
         p_entity_type:     formData.entity_type,
         p_entity_id:       formData.entity_id,
@@ -64,6 +75,7 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
         p_notes:           formData.notes,
         p_movement_date:   formData.movement_date,
         p_unit_id:         selectedEntity.unit_id,
+        p_unit_price:      unitPrice,
       })
 
       if (error) throw error
@@ -136,7 +148,7 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
           <select
             required
             value={formData.adjustment_type}
-            onChange={(e) => setFormData({ ...formData, adjustment_type: e.target.value })}
+            onChange={(e) => setFormData({ ...formData, adjustment_type: e.target.value, reason: e.target.value === 'entrada' ? 'correccion' : 'merma' })}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="salida">Negativo (-) - Reducir stock</option>
@@ -177,13 +189,40 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
             onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="merma">Merma / Deterioro</option>
-            <option value="correccion">Corrección de Inventario</option>
-            <option value="robo">Robo / Pérdida</option>
-            <option value="vencimiento">Vencimiento</option>
-            <option value="otro">Otro</option>
+            {formData.adjustment_type === 'entrada' ? (
+              <>
+                <option value="correccion">Corrección de Inventario</option>
+                <option value="otro">Otro</option>
+              </>
+            ) : (
+              <>
+                <option value="merma">Merma / Deterioro</option>
+                <option value="vencimiento">Vencimiento</option>
+                <option value="correccion">Corrección de Inventario</option>
+                <option value="robo">Robo / Pérdida</option>
+                <option value="otro">Otro</option>
+              </>
+            )}
           </select>
         </div>
+
+        {formData.adjustment_type === 'entrada' && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Costo Unitario (S/)
+              <span className="text-slate-400 text-xs font-normal ml-1">opcional</span>
+            </label>
+            <input
+              type="number"
+              step="0.0001"
+              min="0"
+              value={formData.unit_price}
+              onChange={(e) => setFormData({ ...formData, unit_price: e.target.value })}
+              placeholder="0.0000"
+              className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        )}
 
         <div className="space-y-2">
           <label className="text-sm font-medium">
@@ -211,14 +250,26 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
         </div>
       </div>
 
-      {formData.adjustment_type === 'salida' && (
+      {formData.adjustment_type === 'salida' ? (
         <div className="bg-red-50 p-4 rounded-lg border border-red-200">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-red-900 mb-1">⚠️ Ajuste Negativo</h3>
+              <h3 className="font-semibold text-red-900 mb-1">Ajuste Negativo</h3>
               <p className="text-sm text-red-700">
-                Este ajuste reducirá el stock. Asegúrate de que la cantidad sea correcta.
+                Este ajuste reducirá el stock descontando de los lotes más antiguos (FIFO).
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-green-900 mb-1">Ajuste Positivo</h3>
+              <p className="text-sm text-green-700">
+                Se creará un nuevo lote con la cantidad indicada. El costo unitario es opcional (0 si se omite).
               </p>
             </div>
           </div>

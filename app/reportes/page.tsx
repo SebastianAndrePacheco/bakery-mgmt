@@ -10,6 +10,8 @@ export default async function ReportsPage() {
   const today = new Date().toISOString().split('T')[0]
   const monthStart = new Date(new Date().setDate(1)).toISOString().split('T')[0]
 
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0]
+
   const [
     { data: purchaseOrders },
     { data: productions },
@@ -17,6 +19,7 @@ export default async function ReportsPage() {
     { data: productBatches },
     { count: movementsCount },
     { data: expiringBatches },
+    { data: productionMovements },
   ] = await Promise.all([
     supabase.from('purchase_orders').select('total').gte('order_date', monthStart).in('status', ['recibido_completo', 'recibido_parcial']),
     supabase.from('production_orders').select('quantity_produced').gte('production_date', monthStart).eq('status', 'completada'),
@@ -24,6 +27,13 @@ export default async function ReportsPage() {
     supabase.from('production_batches').select('total_cost').eq('status', 'disponible'),
     supabase.from('inventory_movements').select('*', { count: 'exact', head: true }).gte('movement_date', monthStart),
     supabase.from('supply_batches').select('id').eq('status', 'disponible').gt('current_quantity', 0).not('expiration_date', 'is', null).lte('expiration_date', new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]),
+    supabase.from('inventory_movements')
+      .select('entity_id, quantity, movement_date')
+      .eq('movement_type', 'salida')
+      .eq('movement_reason', 'produccion')
+      .eq('entity_type', 'insumo')
+      .gte('movement_date', ninetyDaysAgo)
+      .order('movement_date', { ascending: true }),
   ])
 
   const totalPurchases = purchaseOrders?.reduce((sum, po) => sum + (po.total || 0), 0) || 0
@@ -32,6 +42,46 @@ export default async function ReportsPage() {
   const productValue = productBatches?.reduce((sum, b) => sum + (b.total_cost || 0), 0) || 0
   const totalInventoryValue = supplyValue + productValue
   const criticalBatches = expiringBatches?.length || 0
+
+  // Compute critical supplies for inventory projection badge
+  const todayTs = new Date()
+  todayTs.setHours(0, 0, 0, 0)
+  const movAgg = new Map<string, { totalQty: number; oldestDate: Date }>()
+  for (const mov of productionMovements || []) {
+    const existing = movAgg.get(mov.entity_id)
+    const movDate = new Date(mov.movement_date)
+    if (existing) {
+      existing.totalQty += mov.quantity || 0
+      if (movDate < existing.oldestDate) existing.oldestDate = movDate
+    } else {
+      movAgg.set(mov.entity_id, { totalQty: mov.quantity || 0, oldestDate: movDate })
+    }
+  }
+  // We need stock per supply to compute days remaining; approximate with a simple count of critical
+  // (supplies where avg daily consumption * 7 > 0 and we cannot easily get stock here without extra query)
+  // Instead: compute critical count as supplies where oldest movement >= 7 days and high consumption rate
+  // For simplicity, fetch supply stocks for flagged supplies
+  const projSupplyIds = [...movAgg.keys()]
+  const { data: projStockBatches } = projSupplyIds.length > 0
+    ? await supabase
+        .from('supply_batches')
+        .select('supply_id, current_quantity')
+        .in('supply_id', projSupplyIds)
+        .eq('status', 'disponible')
+    : { data: [] }
+  const projStockBySupply = new Map<string, number>()
+  for (const b of projStockBatches || []) {
+    projStockBySupply.set(b.supply_id, (projStockBySupply.get(b.supply_id) || 0) + (b.current_quantity || 0))
+  }
+  let criticalSupplies = 0
+  for (const [supplyId, agg] of movAgg.entries()) {
+    const periodDays = Math.max(7, Math.floor((todayTs.getTime() - agg.oldestDate.getTime()) / 86400000))
+    const avgDaily = agg.totalQty / periodDays
+    if (avgDaily <= 0) continue
+    const stock = projStockBySupply.get(supplyId) || 0
+    const daysRemaining = stock / avgDaily
+    if (daysRemaining < 7) criticalSupplies++
+  }
 
   const reportes = [
     {
@@ -82,6 +132,15 @@ export default async function ReportsPage() {
       title: 'Control de Vencimientos',
       desc: 'Lotes próximos a vencer en los próximos 30 días',
       badge: criticalBatches > 0 ? criticalBatches : undefined,
+    },
+    {
+      href: '/reportes/proyeccion-inventario',
+      icon: TrendingUp,
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-50',
+      title: 'Proyección de Inventario',
+      desc: 'Estimación de agotamiento y sugerencias de compra por insumo',
+      badge: criticalSupplies > 0 ? criticalSupplies : undefined,
     },
   ]
 
