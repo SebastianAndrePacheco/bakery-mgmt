@@ -13,7 +13,7 @@ export default async function KardexPage() {
 
   const all = movements || []
 
-  // Batch-fetch entity names (un solo query por tipo)
+  // Batch-fetch entity names
   const supplyIds  = [...new Set(all.filter(m => m.entity_type === 'insumo').map(m => m.entity_id))]
   const productIds = [...new Set(all.filter(m => m.entity_type === 'producto').map(m => m.entity_id))]
 
@@ -36,22 +36,18 @@ export default async function KardexPage() {
       : (productMap[m.entity_id] ?? 'Desconocido'),
   }))
 
-  const entradas       = enhanced.filter(m => m.movement_type === 'entrada')
-  const salidasInsumo  = enhanced.filter(m => m.movement_type === 'salida' && m.entity_type === 'insumo')
-  const salidasProduct = enhanced.filter(m => m.movement_type === 'salida' && m.entity_type === 'producto')
+  const insumos  = enhanced.filter(m => m.entity_type === 'insumo'   && m.movement_type !== 'ajuste')
+  const productos = enhanced.filter(m => m.entity_type === 'producto' && m.movement_type !== 'ajuste')
+  const ajustes  = enhanced.filter(m => m.movement_type === 'ajuste' || m.movement_reason === 'ajuste_inventario')
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Kardex de Inventario</h1>
-        <p className="text-muted-foreground">Registro de movimientos por tipo — últimos {all.length}</p>
+        <p className="text-muted-foreground">Movimientos por tipo de artículo — últimos {all.length}</p>
       </div>
 
-      <KardexColumns
-        entradas={entradas}
-        salidasInsumo={salidasInsumo}
-        salidasProducto={salidasProduct}
-      />
+      <KardexColumns insumos={insumos} productos={productos} ajustes={ajustes} />
     </div>
   )
 }
