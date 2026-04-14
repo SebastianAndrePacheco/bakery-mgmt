@@ -22,6 +22,18 @@ async function getUser() {
   return { supabase, user }
 }
 
+async function getUserWithRole() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { supabase, user: null, role: null }
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  return { supabase, user, role: profile?.role as string | null }
+}
+
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const SupplierSchema = z.object({
@@ -77,8 +89,9 @@ export async function createSupplier(data: unknown): Promise<ActionResult> {
   const parsed = SupplierSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { ruc, email, address, ...rest } = parsed.data
   const { error } = await supabase.from('suppliers').insert([{
@@ -99,8 +112,9 @@ export async function updateSupplier(id: string, data: unknown): Promise<ActionR
   const parsed = SupplierSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { ruc, email, address, ...rest } = parsed.data
   const { error } = await supabase.from('suppliers').update({
@@ -122,8 +136,9 @@ export async function createSupply(data: unknown): Promise<ActionResult> {
   const parsed = SupplySchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { storage_conditions, ...rest } = parsed.data
   const { error } = await supabase.from('supplies').insert([{
@@ -142,8 +157,9 @@ export async function updateSupply(id: string, data: unknown): Promise<ActionRes
   const parsed = SupplySchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { storage_conditions, ...rest } = parsed.data
   const { error } = await supabase.from('supplies').update({
@@ -163,8 +179,9 @@ export async function createProduct(data: unknown): Promise<ActionResult> {
   const parsed = ProductSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { error } = await supabase.from('products').insert([parsed.data])
 
@@ -179,8 +196,9 @@ export async function updateProduct(id: string, data: unknown): Promise<ActionRe
   const parsed = ProductSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { error } = await supabase.from('products').update(parsed.data).eq('id', id)
 
@@ -196,8 +214,9 @@ export async function createRecipeItem(data: unknown): Promise<ActionResult> {
   const parsed = RecipeItemSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { notes, ...rest } = parsed.data
   const { error } = await supabase.from('product_recipes').insert([{
@@ -217,8 +236,9 @@ export async function createRecipeItem(data: unknown): Promise<ActionResult> {
 export async function deleteRecipeItem(id: string): Promise<ActionResult> {
   if (!z.string().uuid().safeParse(id).success) return { error: 'ID inválido' }
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { error } = await supabase.from('product_recipes').delete().eq('id', id)
 
@@ -234,8 +254,9 @@ export async function createProductionOrder(data: unknown): Promise<ActionResult
   const parsed = ProductionOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUser()
+  const { supabase, user, role } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
+  if (!['admin', 'panadero'].includes(role ?? '')) return { error: 'Se requiere rol administrador o panadero' }
 
   const orderNumber = `PROD-${Date.now()}`
   const { notes, ...rest } = parsed.data

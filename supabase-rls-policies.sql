@@ -331,7 +331,13 @@ CREATE POLICY "user_profiles_write" ON user_profiles
 CREATE POLICY "user_profiles_update" ON user_profiles
   FOR UPDATE TO authenticated
   USING (auth.user_role() = 'admin' OR id = auth.uid())
-  WITH CHECK (auth.user_role() = 'admin' OR id = auth.uid());
+  WITH CHECK (
+    auth.user_role() = 'admin'
+    OR (
+      id = auth.uid()
+      AND role = (SELECT role FROM user_profiles WHERE id = auth.uid())
+    )
+  );
 
 CREATE POLICY "user_profiles_delete" ON user_profiles
   FOR DELETE TO authenticated USING (auth.user_role() = 'admin');
