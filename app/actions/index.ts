@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/utils/supabase/server'
+import { supabaseAdmin } from '@/utils/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 
@@ -363,6 +364,105 @@ export async function deleteRecipeItem(id: string): Promise<ActionResult> {
 
   if (error) return dbError(error, 'deleteRecipeItem')
   revalidatePath('/produccion/productos')
+  return { success: true }
+}
+
+
+// ─── User Management Actions (admin only) ────────────────────────────────────
+
+const CreateUserSchema = z.object({
+  email:     z.string().email('Email inválido'),
+  password:  z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  full_name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100).trim(),
+  role:      z.enum(['admin', 'panadero', 'cajero']),
+  phone:     z.string().max(20).trim().optional().or(z.literal('')),
+})
+
+const UpdateUserSchema = z.object({
+  full_name: z.string().min(2).max(100).trim(),
+  role:      z.enum(['admin', 'panadero', 'cajero']),
+  phone:     z.string().max(20).trim().optional().or(z.literal('')),
+  is_active: z.boolean(),
+})
+
+export async function adminCreateUser(data: unknown): Promise<ActionResult> {
+  const parsed = CreateUserSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const { user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  const { email, password, full_name, role: newRole, phone } = parsed.data
+
+  const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  })
+
+  if (authError) {
+    if (authError.message.includes('already registered')) {
+      return { error: 'Ya existe un usuario con ese email' }
+    }
+    return { error: 'Error al crear usuario: ' + authError.message }
+  }
+
+  const { error: profileError } = await supabaseAdmin
+    .from('user_profiles')
+    .insert({
+      id:        authUser.user.id,
+      full_name,
+      role:      newRole,
+      phone:     phone || null,
+      is_active: true,
+    })
+
+  if (profileError) {
+    await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+    return { error: 'Error al crear perfil de usuario' }
+  }
+
+  revalidatePath('/usuarios')
+  return { success: true }
+}
+
+export async function adminUpdateUser(id: string, data: unknown): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) return { error: 'ID inválido' }
+
+  const parsed = UpdateUserSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const { user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+  if (id === user.id) return { error: 'No puedes modificar tu propio perfil desde aquí' }
+
+  const { full_name, role: newRole, phone, is_active } = parsed.data
+
+  const { error } = await supabaseAdmin
+    .from('user_profiles')
+    .update({ full_name, role: newRole, phone: phone || null, is_active })
+    .eq('id', id)
+
+  if (error) return { error: 'Error al actualizar usuario' }
+
+  revalidatePath('/usuarios')
+  return { success: true }
+}
+
+export async function adminResetPassword(id: string, password: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) return { error: 'ID inválido' }
+  if (password.length < 8) return { error: 'La contraseña debe tener al menos 8 caracteres' }
+
+  const { user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+  if (id === user.id) return { error: 'No puedes cambiar tu propia contraseña desde aquí' }
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(id, { password })
+  if (error) return { error: 'Error al cambiar contraseña' }
+
   return { success: true }
 }
 

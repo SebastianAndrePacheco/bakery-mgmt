@@ -78,6 +78,12 @@ const menuItems: MenuItem[] = [
     href: '/reportes',
     roles: ['admin', 'panadero', 'cajero'],
   },
+  {
+    title: 'Usuarios',
+    icon: Users,
+    href: '/usuarios',
+    roles: ['admin'],
+  },
 ]
 
 interface SidebarProps {
