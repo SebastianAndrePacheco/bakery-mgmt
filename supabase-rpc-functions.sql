@@ -6,6 +6,10 @@
 --   Ejecutar este script completo en Supabase > SQL Editor
 --   ANTES de desplegar los cambios en los componentes.
 --
+-- REQUISITO PREVIO: Ejecutar antes `supabase-rls-policies.sql`
+--   para crear la función `public.get_user_role()` que usan las
+--   verificaciones de rol embebidas en cada función.
+--
 -- NOTA: Este script asume que la base de datos tiene las
 -- columnas adicionales creadas después del schema inicial:
 --   purchase_orders : guia_remision, comprobante_tipo,
@@ -59,6 +63,11 @@ DECLARE
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'No autorizado';
+  END IF;
+
+  -- Verificación de rol: solo admin puede recibir órdenes
+  IF public.get_user_role() NOT IN ('admin') THEN
+    RAISE EXCEPTION 'Permiso denegado: se requiere rol administrador';
   END IF;
 
   -- Obtener y bloquear la orden para evitar doble recepción
@@ -181,6 +190,11 @@ DECLARE
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'No autorizado';
+  END IF;
+
+  -- Verificación de rol: admin o panadero pueden completar producción
+  IF public.get_user_role() NOT IN ('admin', 'panadero') THEN
+    RAISE EXCEPTION 'Permiso denegado: se requiere rol administrador o panadero';
   END IF;
 
   -- Obtener y bloquear la orden de producción
@@ -366,6 +380,11 @@ BEGIN
     RAISE EXCEPTION 'No autorizado';
   END IF;
 
+  -- Verificación de rol: solo admin puede crear órdenes de compra
+  IF public.get_user_role() NOT IN ('admin') THEN
+    RAISE EXCEPTION 'Permiso denegado: se requiere rol administrador';
+  END IF;
+
   -- Crear cabecera de la orden
   INSERT INTO purchase_orders (
     supplier_id, order_date, expected_delivery_date, notes,
@@ -451,6 +470,11 @@ DECLARE
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'No autorizado';
+  END IF;
+
+  -- Verificación de rol: admin o panadero pueden registrar ajustes
+  IF public.get_user_role() NOT IN ('admin', 'panadero') THEN
+    RAISE EXCEPTION 'Permiso denegado: se requiere rol administrador o panadero';
   END IF;
 
   -- Mapear motivo de formulario al ENUM de BD
@@ -568,3 +592,78 @@ $$;
 GRANT EXECUTE ON FUNCTION record_inventory_adjustment(
   TEXT, UUID, TEXT, DECIMAL, TEXT, TEXT, DATE, UUID, DECIMAL
 ) TO authenticated;
+
+
+-- =====================================================
+-- MIGRATION: Recetas siempre en la unidad nativa del insumo
+--
+-- Antes: `product_recipes.unit_id` podía ser distinta de
+-- `supplies.unit_id`. `complete_production_order` consumía
+-- `pr.quantity * lote` sin convertir, provocando descuentos
+-- mezclados entre unidades (p. ej. restar "500 kg" por una
+-- receta escrita como "500 g").
+--
+-- Ahora: se migran las cantidades existentes a la unidad del
+-- insumo usando `units.conversion_factor` + `units.base_unit_id`,
+-- y un trigger prohíbe que futuras filas tengan unidad distinta.
+-- =====================================================
+
+-- 1. Migrar filas con unidad distinta a la del insumo.
+--    Solo convierte cuando las unidades comparten el mismo
+--    tipo (p. ej. masa↔masa) y tienen la misma unidad base.
+WITH recipe_conversion AS (
+  SELECT
+    pr.id,
+    pr.quantity,
+    pr.unit_id                 AS old_unit_id,
+    s.unit_id                  AS supply_unit_id,
+    u_from.type                AS from_type,
+    u_to.type                  AS to_type,
+    COALESCE(u_from.base_unit_id, u_from.id)  AS from_base_id,
+    COALESCE(u_to.base_unit_id,   u_to.id)    AS to_base_id,
+    COALESCE(u_from.conversion_factor, 1)     AS from_factor,
+    COALESCE(u_to.conversion_factor,   1)     AS to_factor
+  FROM product_recipes pr
+  JOIN supplies s      ON s.id = pr.supply_id
+  JOIN units    u_from ON u_from.id = pr.unit_id
+  JOIN units    u_to   ON u_to.id   = s.unit_id
+  WHERE pr.unit_id <> s.unit_id
+)
+UPDATE product_recipes pr
+SET
+  quantity = rc.quantity * rc.from_factor / rc.to_factor,
+  unit_id  = rc.supply_unit_id
+FROM recipe_conversion rc
+WHERE pr.id = rc.id
+  AND rc.from_type = rc.to_type
+  AND rc.from_base_id = rc.to_base_id;
+
+-- 2. Cualquier fila que no pudo convertirse (unidades incompatibles)
+--    se deja como estaba; el trigger de abajo la rechazará en la
+--    próxima modificación. Se pueden listar con:
+--      SELECT pr.* FROM product_recipes pr
+--      JOIN supplies s ON s.id = pr.supply_id
+--      WHERE pr.unit_id <> s.unit_id;
+
+-- 3. Trigger: fuerza pr.unit_id = supplies.unit_id en INSERT/UPDATE.
+CREATE OR REPLACE FUNCTION enforce_recipe_unit_matches_supply()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_supply_unit UUID;
+BEGIN
+  SELECT unit_id INTO v_supply_unit FROM supplies WHERE id = NEW.supply_id;
+  IF v_supply_unit IS NULL THEN
+    RAISE EXCEPTION 'Insumo % no encontrado', NEW.supply_id;
+  END IF;
+  NEW.unit_id := v_supply_unit;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_recipe_unit_matches_supply ON product_recipes;
+CREATE TRIGGER trg_recipe_unit_matches_supply
+  BEFORE INSERT OR UPDATE OF supply_id, unit_id ON product_recipes
+  FOR EACH ROW
+  EXECUTE FUNCTION enforce_recipe_unit_matches_supply();

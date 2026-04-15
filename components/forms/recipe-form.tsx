@@ -10,10 +10,9 @@ import { createRecipeItem } from '@/app/actions'
 interface RecipeFormProps {
   productId: string
   supplies: (Supply & { unit?: Unit })[]
-  units: Unit[]
 }
 
-export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
+export function RecipeForm({ productId, supplies }: RecipeFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,19 +20,10 @@ export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
   const [formData, setFormData] = useState({
     supply_id: '',
     quantity: '',
-    unit_id: '',
     notes: '',
   })
 
-  // Actualizar unidad por defecto cuando se selecciona un insumo
-  const handleSupplyChange = (supplyId: string) => {
-    const supply = supplies.find(s => s.id === supplyId)
-    setFormData({
-      ...formData,
-      supply_id: supplyId,
-      unit_id: supply?.unit_id || '',
-    })
-  }
+  const selectedSupply = supplies.find(s => s.id === formData.supply_id)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,7 +34,6 @@ export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
       product_id: productId,
       supply_id: formData.supply_id,
       quantity: parseFloat(formData.quantity),
-      unit_id: formData.unit_id,
       notes: formData.notes,
     })
 
@@ -54,7 +43,7 @@ export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
       return
     }
 
-    setFormData({ supply_id: '', quantity: '', unit_id: '', notes: '' })
+    setFormData({ supply_id: '', quantity: '', notes: '' })
     setLoading(false)
     router.refresh()
   }
@@ -70,53 +59,38 @@ export function RecipeForm({ productId, supplies, units }: RecipeFormProps) {
           <select
             required
             value={formData.supply_id}
-            onChange={(e) => handleSupplyChange(e.target.value)}
+            onChange={(e) => setFormData({ ...formData, supply_id: e.target.value })}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">Seleccionar insumo</option>
             {supplies.map((supply) => (
               <option key={supply.id} value={supply.id}>
-                {supply.code} - {supply.name}
+                {supply.code} - {supply.name} ({supply.unit?.symbol})
               </option>
             ))}
           </select>
         </div>
 
         {/* Cantidad */}
-        <div className="md:col-span-2 space-y-2">
+        <div className="md:col-span-4 space-y-2">
           <label className="text-sm font-medium">
             Cantidad <span className="text-red-600">*</span>
           </label>
-          <input
-            type="number"
-            required
-            step="0.001"
-            min="0.001"
-            value={formData.quantity}
-            onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-            placeholder="0.5"
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-
-        {/* Unidad */}
-        <div className="md:col-span-2 space-y-2">
-          <label className="text-sm font-medium">
-            Unidad <span className="text-red-600">*</span>
-          </label>
-          <select
-            required
-            value={formData.unit_id}
-            onChange={(e) => setFormData({ ...formData, unit_id: e.target.value })}
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">Unidad</option>
-            {units.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.symbol}
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              required
+              step="0.001"
+              min="0.001"
+              value={formData.quantity}
+              onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+              placeholder="0.5"
+              className="flex-1 px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <div className="px-3 py-2 bg-slate-100 rounded-md text-sm font-medium min-w-[4rem] text-center">
+              {selectedSupply?.unit?.symbol ?? '—'}
+            </div>
+          </div>
         </div>
 
         {/* Notas */}

@@ -44,12 +44,6 @@ export default async function ProductRecipePage({
     .eq('is_active', true)
     .order('name', { ascending: true })
 
-  // Obtener unidades
-  const { data: units } = await supabase
-    .from('units')
-    .select('*')
-    .order('name', { ascending: true })
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -95,10 +89,9 @@ export default async function ProductRecipePage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <RecipeForm 
+          <RecipeForm
             productId={id}
             supplies={supplies || []}
-            units={units || []}
           />
         </CardContent>
       </Card>

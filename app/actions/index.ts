@@ -16,10 +16,23 @@ function firstError(err: z.ZodError): ActionResult {
   return { error: err.issues[0].message }
 }
 
-async function getUser() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return { supabase, user }
+/**
+ * Sanitiza errores de Supabase/PostgreSQL para no exponer detalles internos al cliente.
+ * Loguea el error completo en el servidor y retorna un mensaje genérico en español.
+ */
+function dbError(error: { code?: string; message?: string } | null | undefined, context: string): ActionResult {
+  console.error(`[DB:${context}]`, error)
+  if (!error) return { error: 'Error desconocido' }
+
+  switch (error.code) {
+    case '23505': return { error: 'Este registro ya existe' }
+    case '23503': return { error: 'El registro está referenciado por otros datos' }
+    case '23502': return { error: 'Falta información obligatoria' }
+    case '23514': return { error: 'Los datos no cumplen las restricciones' }
+    case '42501': return { error: 'No tienes permisos para esta operación' }
+    case 'PGRST116': return { error: 'Registro no encontrado' }
+    default: return { error: 'No se pudo completar la operación' }
+  }
 }
 
 async function getUserWithRole() {
@@ -32,6 +45,31 @@ async function getUserWithRole() {
     .eq('id', user.id)
     .single()
   return { supabase, user, role: profile?.role as string | null }
+}
+
+/**
+ * Rate limiter en memoria por clave (usuario+acción). Válido para un único servidor —
+ * suficiente para el uso interno de panadería. Para producción multi-instancia,
+ * migrar a Redis u otro store compartido.
+ */
+const _actionAttempts = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(key: string, limit: number, windowMs: number): ActionResult | null {
+  const now = Date.now()
+  const entry = _actionAttempts.get(key)
+
+  if (!entry || now >= entry.resetAt) {
+    _actionAttempts.set(key, { count: 1, resetAt: now + windowMs })
+    return null
+  }
+
+  if (entry.count >= limit) {
+    const remaining = Math.ceil((entry.resetAt - now) / 1000)
+    return { error: `Demasiadas operaciones. Espera ${remaining} segundo(s) e intenta de nuevo.` }
+  }
+
+  entry.count++
+  return null
 }
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -70,7 +108,6 @@ const RecipeItemSchema = z.object({
   product_id: uuid,
   supply_id: uuid,
   quantity: z.number().positive('La cantidad debe ser mayor a 0'),
-  unit_id: uuid,
   notes: z.string().max(300).optional().or(z.literal('')),
 })
 
@@ -85,6 +122,72 @@ const ProductionOrderSchema = z.object({
   order_type: z.enum(['programada', 'especial']),
   notes: z.string().max(500).optional().or(z.literal('')),
 })
+
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+
+const PurchaseOrderItemSchema = z.object({
+  supply_id: uuid,
+  quantity: z.number().positive('La cantidad debe ser mayor a 0'),
+  unit_price: z.number().min(0, 'Precio no puede ser negativo'),
+  total: z.number().min(0, 'Total no puede ser negativo'),
+})
+
+const CreatePurchaseOrderSchema = z.object({
+  supplier_id: uuid,
+  order_date: z.string().regex(dateRegex, 'Fecha inválida'),
+  expected_delivery_date: z.string().regex(dateRegex, 'Fecha inválida').optional().or(z.literal('')),
+  notes: z.string().max(500).optional().or(z.literal('')),
+  subtotal: z.number().min(0),
+  tax: z.number().min(0),
+  total: z.number().min(0),
+  items: z.array(PurchaseOrderItemSchema).min(1, 'Debe agregar al menos un insumo'),
+})
+
+const ReceiveOrderItemSchema = z.object({
+  supply_id: uuid,
+  quantity_received: z.number().positive('Cantidad recibida debe ser mayor a 0'),
+  unit_price: z.number().min(0, 'Precio no puede ser negativo'),
+  expiration_date: z.string().regex(dateRegex, 'Fecha inválida').optional().or(z.literal('')),
+})
+
+const ReceiveOrderSchema = z.object({
+  order_id: uuid,
+  received_date: z.string().regex(dateRegex, 'Fecha inválida'),
+  guia_remision: z.string().min(1, 'Guía de remisión requerida').max(50).trim(),
+  comprobante_tipo: z.enum(['factura', 'boleta', 'ticket', 'recibo']),
+  comprobante_serie: z.string().min(1, 'Serie requerida').max(20).trim(),
+  comprobante_numero: z.string().min(1, 'Número requerido').max(30).trim(),
+  comprobante_fecha: z.string().regex(dateRegex, 'Fecha inválida'),
+  comprobante_monto: z.number().min(0, 'Monto no puede ser negativo'),
+  items: z.array(ReceiveOrderItemSchema).min(1, 'Debe recibir al menos un insumo'),
+})
+
+const AdjustmentSchema = z.object({
+  entity_type: z.enum(['insumo', 'producto']),
+  entity_id: uuid,
+  adjustment_type: z.enum(['entrada', 'salida']),
+  quantity: z.number().positive('Cantidad debe ser mayor a 0'),
+  reason: z.string().min(1, 'Motivo requerido').max(50),
+  notes: z.string().max(500).optional().or(z.literal('')),
+  movement_date: z.string().regex(dateRegex, 'Fecha inválida'),
+  unit_id: uuid,
+  unit_price: z.number().min(0, 'Precio no puede ser negativo').default(0),
+})
+
+const CompleteProductionSchema = z.object({
+  order_id: uuid,
+  quantity_produced: z.number().positive('Cantidad debe ser mayor a 0'),
+  production_date: z.string().regex(dateRegex, 'Fecha inválida'),
+  notes: z.string().max(500).optional().or(z.literal('')),
+})
+
+export type ProductionResult = {
+  batch_code: string
+  quantity_produced: number
+  total_cost: number
+  unit_cost: number
+  expiration_date: string
+}
 
 
 // ─── Supplier Actions ─────────────────────────────────────────────────────────
@@ -105,7 +208,7 @@ export async function createSupplier(data: unknown): Promise<ActionResult> {
     address: address || null,
   }])
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'createSupplier')
   revalidatePath('/compras/proveedores')
   return { success: true }
 }
@@ -128,7 +231,7 @@ export async function updateSupplier(id: string, data: unknown): Promise<ActionR
     address: address || null,
   }).eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'updateSupplier')
   revalidatePath('/compras/proveedores')
   return { success: true }
 }
@@ -150,7 +253,7 @@ export async function createSupply(data: unknown): Promise<ActionResult> {
     storage_conditions: storage_conditions || null,
   }])
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'createSupply')
   revalidatePath('/inventario/insumos')
   return { success: true }
 }
@@ -171,7 +274,7 @@ export async function updateSupply(id: string, data: unknown): Promise<ActionRes
     storage_conditions: storage_conditions || null,
   }).eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'updateSupply')
   revalidatePath('/inventario/insumos')
   return { success: true }
 }
@@ -189,7 +292,7 @@ export async function createProduct(data: unknown): Promise<ActionResult> {
 
   const { error } = await supabase.from('products').insert([parsed.data])
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'createProduct')
   revalidatePath('/produccion/productos')
   return { success: true }
 }
@@ -206,7 +309,7 @@ export async function updateProduct(id: string, data: unknown): Promise<ActionRe
 
   const { error } = await supabase.from('products').update(parsed.data).eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'updateProduct')
   revalidatePath('/produccion/productos')
   return { success: true }
 }
@@ -222,15 +325,27 @@ export async function createRecipeItem(data: unknown): Promise<ActionResult> {
   if (!user) return { error: 'No autorizado' }
   if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
-  const { notes, ...rest } = parsed.data
+  const { notes, product_id, supply_id, quantity } = parsed.data
+
+  const { data: supply, error: supplyErr } = await supabase
+    .from('supplies')
+    .select('unit_id')
+    .eq('id', supply_id)
+    .single()
+
+  if (supplyErr || !supply) return { error: 'Insumo no encontrado' }
+
   const { error } = await supabase.from('product_recipes').insert([{
-    ...rest,
+    product_id,
+    supply_id,
+    quantity,
+    unit_id: supply.unit_id,
     notes: notes || null,
   }])
 
   if (error) {
     if (error.code === '23505') return { error: 'Este insumo ya está en la receta' }
-    return { error: error.message }
+    return dbError(error, 'createRecipeItem')
   }
 
   revalidatePath('/produccion/productos')
@@ -246,7 +361,7 @@ export async function deleteRecipeItem(id: string): Promise<ActionResult> {
 
   const { error } = await supabase.from('product_recipes').delete().eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'deleteRecipeItem')
   revalidatePath('/produccion/productos')
   return { success: true }
 }
@@ -273,9 +388,153 @@ export async function createProductionOrder(data: unknown): Promise<ActionResult
     notes: notes || null,
   }])
 
-  if (error) return { error: error.message }
+  if (error) return dbError(error, 'createProductionOrder')
   revalidatePath('/produccion/ordenes')
   return { success: true }
+}
+
+
+// ─── Purchase Order Actions ──────────────────────────────────────────────────
+
+export async function createPurchaseOrder(data: unknown): Promise<ActionResult> {
+  const parsed = CreatePurchaseOrderSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  const limited = checkRateLimit(`createPurchaseOrder:${user.id}`, 10, 60_000)
+  if (limited) return limited
+
+  const { error } = await supabase.rpc('create_purchase_order_with_items', {
+    p_supplier_id: parsed.data.supplier_id,
+    p_order_date: parsed.data.order_date,
+    p_expected_delivery_date: parsed.data.expected_delivery_date || null,
+    p_notes: parsed.data.notes || null,
+    p_order_number: `OC-${Date.now()}`,
+    p_subtotal: parsed.data.subtotal,
+    p_tax: parsed.data.tax,
+    p_total: parsed.data.total,
+    p_items: parsed.data.items,
+  })
+
+  if (error) return dbError(error, 'createPurchaseOrder')
+  revalidatePath('/compras/ordenes')
+  return { success: true }
+}
+
+export async function receivePurchaseOrder(data: unknown): Promise<ActionResult> {
+  const parsed = ReceiveOrderSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (!['admin', 'panadero'].includes(role ?? '')) {
+    return { error: 'Se requiere rol administrador o panadero' }
+  }
+
+  const limited = checkRateLimit(`receivePurchaseOrder:${user.id}`, 10, 60_000)
+  if (limited) return limited
+
+  // Construir batch_codes en servidor (no confiar en cliente)
+  const [{ data: order }, { data: supplies }] = await Promise.all([
+    supabase.from('purchase_orders').select('order_number').eq('id', parsed.data.order_id).single(),
+    supabase.from('supplies').select('id, code').in('id', parsed.data.items.map(i => i.supply_id)),
+  ])
+
+  if (!order) return { error: 'Orden no encontrada' }
+  const supplyMap = Object.fromEntries((supplies ?? []).map(s => [s.id, s.code]))
+  const ts = Date.now()
+
+  const itemsPayload = parsed.data.items.map(item => ({
+    supply_id: item.supply_id,
+    batch_code: `LOTE-${order.order_number}-${supplyMap[item.supply_id] ?? 'UNK'}-${ts}`,
+    quantity_received: item.quantity_received,
+    unit_price: item.unit_price,
+    expiration_date: item.expiration_date || null,
+  }))
+
+  const { error } = await supabase.rpc('receive_purchase_order', {
+    p_order_id: parsed.data.order_id,
+    p_received_date: parsed.data.received_date,
+    p_guia_remision: parsed.data.guia_remision,
+    p_comprobante_tipo: parsed.data.comprobante_tipo,
+    p_comprobante_serie: parsed.data.comprobante_serie,
+    p_comprobante_numero: parsed.data.comprobante_numero,
+    p_comprobante_fecha: parsed.data.comprobante_fecha,
+    p_comprobante_monto: parsed.data.comprobante_monto,
+    p_items: itemsPayload,
+  })
+
+  if (error) return dbError(error, 'receivePurchaseOrder')
+  revalidatePath('/compras/ordenes')
+  revalidatePath('/inventario/insumos')
+  revalidatePath('/inventario/kardex')
+  return { success: true }
+}
+
+
+// ─── Inventory Adjustment Action ─────────────────────────────────────────────
+
+export async function recordAdjustment(data: unknown): Promise<ActionResult> {
+  const parsed = AdjustmentSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  const limited = checkRateLimit(`recordAdjustment:${user.id}`, 15, 60_000)
+  if (limited) return limited
+
+  const { error } = await supabase.rpc('record_inventory_adjustment', {
+    p_entity_type: parsed.data.entity_type,
+    p_entity_id: parsed.data.entity_id,
+    p_adjustment_type: parsed.data.adjustment_type,
+    p_quantity: parsed.data.quantity,
+    p_reason: parsed.data.reason,
+    p_notes: parsed.data.notes || '',
+    p_movement_date: parsed.data.movement_date,
+    p_unit_id: parsed.data.unit_id,
+    p_unit_price: parsed.data.unit_price,
+  })
+
+  if (error) return dbError(error, 'recordAdjustment')
+  revalidatePath('/inventario/ajustes')
+  revalidatePath('/inventario/kardex')
+  return { success: true }
+}
+
+
+// ─── Production Completion Action ────────────────────────────────────────────
+
+export async function completeProductionOrder(
+  data: unknown
+): Promise<{ error: string } | { success: true; data: ProductionResult }> {
+  const parsed = CompleteProductionSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error) as { error: string }
+
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (!['admin', 'panadero'].includes(role ?? '')) {
+    return { error: 'Se requiere rol administrador o panadero' }
+  }
+
+  const limited = checkRateLimit(`completeProductionOrder:${user.id}`, 10, 60_000)
+  if (limited) return limited as { error: string }
+
+  const { data: result, error } = await supabase.rpc('complete_production_order', {
+    p_order_id: parsed.data.order_id,
+    p_quantity_produced: parsed.data.quantity_produced,
+    p_production_date: parsed.data.production_date,
+    p_notes: parsed.data.notes || '',
+  })
+
+  if (error) return dbError(error, 'completeProductionOrder') as { error: string }
+  revalidatePath('/produccion/ordenes')
+  revalidatePath('/inventario/kardex')
+  return { success: true, data: result as ProductionResult }
 }
 
 
