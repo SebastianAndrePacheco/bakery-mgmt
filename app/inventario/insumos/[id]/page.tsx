@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { notFound } from 'next/navigation'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function EditSupplyPage({ 
   params 
@@ -44,6 +45,11 @@ export default async function EditSupplyPage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Inventario', href: '/inventario' },
+        { label: 'Insumos', href: '/inventario/insumos' },
+        { label: supply.name },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/inventario/insumos">
           <Button variant="ghost" size="icon">

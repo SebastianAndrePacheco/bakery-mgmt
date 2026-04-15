@@ -3,10 +3,16 @@ import { SupplierForm } from '@/components/forms/supplier-form'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default function NewSupplierPage() {
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Compras', href: '/compras' },
+        { label: 'Proveedores', href: '/compras/proveedores' },
+        { label: 'Nuevo Proveedor' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/compras/proveedores">
           <Button variant="ghost" size="icon">

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { formatCurrency } from '@/utils/helpers/currency'
 import { formatDate } from '@/utils/helpers/dates'
 import { MonthSelector } from '@/components/ui/month-selector'
+import { ExportButton } from '@/components/ui/export-button'
 
 export default async function ComprasProveedorPage({
   searchParams,
@@ -41,11 +42,20 @@ export default async function ComprasProveedorPage({
     .in('status', ['recibido_completo', 'recibido_parcial', 'pendiente', 'enviado'])
     .order('order_date', { ascending: false })
 
-  // Agrupar por proveedor
-  const bySupplier: Record<string, { name: string; orders: any[]; total: number; received: number }> = {}
-  for (const o of orders || []) {
-    const sid = (o.supplier as any)?.id
-    const sname = (o.supplier as any)?.business_name || 'Desconocido'
+  type PurchaseOrderRow = {
+    id: string
+    order_number: string
+    order_date: string
+    total: number | null
+    status: string
+    supplier: { id: string; business_name: string } | null
+  }
+
+  const bySupplier: Record<string, { name: string; orders: PurchaseOrderRow[]; total: number; received: number }> = {}
+  for (const o of ((orders || []) as unknown as PurchaseOrderRow[])) {
+    const sid = o.supplier?.id
+    const sname = o.supplier?.business_name || 'Desconocido'
+    if (!sid) continue
     if (!bySupplier[sid]) bySupplier[sid] = { name: sname, orders: [], total: 0, received: 0 }
     bySupplier[sid].orders.push(o)
     bySupplier[sid].total += o.total || 0
@@ -59,6 +69,14 @@ export default async function ComprasProveedorPage({
   const totalRecibido = supplierList.reduce((s, x) => s + x.received, 0)
 
   // Meses para el selector
+  const exportData = ((orders || []) as unknown as PurchaseOrderRow[]).map(o => ({
+    proveedor: o.supplier?.business_name ?? '',
+    n_orden: o.order_number,
+    fecha: o.order_date,
+    estado: o.status,
+    total: (o.total ?? 0).toFixed(2),
+  }))
+
   const monthOptions = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     return {
@@ -79,6 +97,17 @@ export default async function ComprasProveedorPage({
           <h1 className="text-3xl font-bold">Compras por Proveedor</h1>
           <p className="text-muted-foreground capitalize">{mesLabel}</p>
         </div>
+        <ExportButton
+          filename={`compras_proveedor_${mes || monthOptions[0].value}`}
+          columns={[
+            { label: 'Proveedor', key: 'proveedor' },
+            { label: 'N° Orden', key: 'n_orden' },
+            { label: 'Fecha', key: 'fecha' },
+            { label: 'Estado', key: 'estado' },
+            { label: 'Total (S/)', key: 'total' },
+          ]}
+          data={exportData}
+        />
         <MonthSelector options={monthOptions} current={mes || monthOptions[0].value} />
       </div>
 
@@ -151,7 +180,7 @@ export default async function ComprasProveedorPage({
                           </tr>
                         </thead>
                         <tbody>
-                          {supplier.orders.map((o: any) => (
+                          {supplier.orders.map((o) => (
                             <tr key={o.id} className="border-t border-slate-100">
                               <td className="py-1.5 px-2 font-mono text-slate-700">{o.order_number}</td>
                               <td className="py-1.5 px-2 text-slate-600">{formatDate(o.order_date)}</td>

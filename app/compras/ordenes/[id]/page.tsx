@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation'
 import { formatDate } from '@/utils/helpers/dates'
 import { formatCurrency } from '@/utils/helpers/currency'
 import { ReceiveOrderForm } from '@/components/forms/receive-order-form'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function PurchaseOrderDetailPage({ 
   params 
@@ -63,6 +64,11 @@ export default async function PurchaseOrderDetailPage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Compras', href: '/compras' },
+        { label: 'Órdenes de Compra', href: '/compras/ordenes' },
+        { label: order.order_number },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/compras/ordenes">
           <Button variant="ghost" size="icon">

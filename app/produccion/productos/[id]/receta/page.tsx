@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { RecipeForm } from '@/components/forms/recipe-form'
 import { RecipeTable } from '@/components/tables/recipe-table'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function ProductRecipePage({ 
   params 
@@ -46,6 +47,12 @@ export default async function ProductRecipePage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Producción', href: '/produccion' },
+        { label: 'Productos', href: '/produccion/productos' },
+        { label: product.name, href: `/produccion/productos/${id}` },
+        { label: 'Receta' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/produccion/productos">
           <Button variant="ghost" size="icon">

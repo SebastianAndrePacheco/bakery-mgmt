@@ -4,14 +4,24 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, AlertTriangle, Clock, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/utils/helpers/dates'
+import { ExportButton } from '@/components/ui/export-button'
+import { DaysSelector } from '@/components/ui/days-selector'
 
-export default async function VencimientosPage() {
+export default async function VencimientosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ dias?: string }>
+}) {
+  const { dias: diasParam } = await searchParams
+  const diasHorizonte = Math.min(90, Math.max(7, parseInt(diasParam || '30')))
+
   const supabase = await createClient()
 
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
   const in7days = new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0]
-  const in30days = new Date(today.getTime() + 30 * 86400000).toISOString().split('T')[0]
+  const inHorizonte = new Date(today.getTime() + diasHorizonte * 86400000).toISOString().split('T')[0]
+  const in30days = inHorizonte
 
   // Lotes de insumos con fecha de vencimiento
   const { data: supplyBatches } = await supabase
@@ -45,13 +55,26 @@ export default async function VencimientosPage() {
     return 'proximo'
   }
 
-  const supplyExpired  = (supplyBatches || []).filter(b => classify(b.expiration_date) === 'vencido')
-  const supplyCritical = (supplyBatches || []).filter(b => classify(b.expiration_date) === 'critico')
-  const supplyWarning  = (supplyBatches || []).filter(b => classify(b.expiration_date) === 'proximo')
+  type ExpiringBatch = {
+    id: string
+    expiration_date: string
+    current_quantity: number | null
+    batch_number?: string
+    batch_code?: string
+    supply?: { code: string; name: string; unit?: { symbol: string } | null } | null
+    product?: { code: string; name: string; unit?: { symbol: string } | null } | null
+  }
 
-  const productExpired  = (productBatches || []).filter(b => classify(b.expiration_date) === 'vencido')
-  const productCritical = (productBatches || []).filter(b => classify(b.expiration_date) === 'critico')
-  const productWarning  = (productBatches || []).filter(b => classify(b.expiration_date) === 'proximo')
+  const supplyBatchList = (supplyBatches ?? []) as unknown as ExpiringBatch[]
+  const productBatchList = (productBatches ?? []) as unknown as ExpiringBatch[]
+
+  const supplyExpired  = supplyBatchList.filter(b => classify(b.expiration_date) === 'vencido')
+  const supplyCritical = supplyBatchList.filter(b => classify(b.expiration_date) === 'critico')
+  const supplyWarning  = supplyBatchList.filter(b => classify(b.expiration_date) === 'proximo')
+
+  const productExpired  = productBatchList.filter(b => classify(b.expiration_date) === 'vencido')
+  const productCritical = productBatchList.filter(b => classify(b.expiration_date) === 'critico')
+  const productWarning  = productBatchList.filter(b => classify(b.expiration_date) === 'proximo')
 
   const totalCritical = supplyExpired.length + supplyCritical.length + productExpired.length + productCritical.length
 
@@ -60,7 +83,32 @@ export default async function VencimientosPage() {
     return diff
   }
 
-  const BadgeRow = ({ batch, type }: { batch: any; type: 'supply' | 'product' }) => {
+  const exportData = [
+    ...supplyBatchList.map(b => ({
+      tipo: 'Insumo',
+      lote: b.batch_number ?? '',
+      articulo: b.supply?.name ?? '',
+      codigo: b.supply?.code ?? '',
+      stock: (b.current_quantity ?? 0).toFixed(2),
+      unidad: b.supply?.unit?.symbol ?? '',
+      vence: b.expiration_date,
+      estado: classify(b.expiration_date),
+      dias: daysUntil(b.expiration_date),
+    })),
+    ...productBatchList.map(b => ({
+      tipo: 'Producto Terminado',
+      lote: b.batch_code ?? '',
+      articulo: b.product?.name ?? '',
+      codigo: b.product?.code ?? '',
+      stock: (b.current_quantity ?? 0).toFixed(2),
+      unidad: b.product?.unit?.symbol ?? '',
+      vence: b.expiration_date,
+      estado: classify(b.expiration_date),
+      dias: daysUntil(b.expiration_date),
+    })),
+  ]
+
+  const BadgeRow = ({ batch, type }: { batch: ExpiringBatch; type: 'supply' | 'product' }) => {
     const status = classify(batch.expiration_date)
     const days = daysUntil(batch.expiration_date)
     const entity = type === 'supply' ? batch.supply : batch.product
@@ -92,7 +140,7 @@ export default async function VencimientosPage() {
     )
   }
 
-  const TableWrapper = ({ items, type, emptyMsg }: { items: any[]; type: 'supply' | 'product'; emptyMsg: string }) =>
+  const TableWrapper = ({ items, type }: { items: ExpiringBatch[]; type: 'supply' | 'product'; emptyMsg: string }) =>
     items.length === 0 ? null : (
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full">
@@ -120,10 +168,35 @@ export default async function VencimientosPage() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold">Control de Vencimientos</h1>
-          <p className="text-muted-foreground">Lotes próximos a vencer en los próximos 30 días</p>
+          <p className="text-muted-foreground">Lotes próximos a vencer en los próximos {diasHorizonte} días</p>
         </div>
+        <DaysSelector
+          current={diasHorizonte}
+          options={[
+            { value: 7, label: '7 días' },
+            { value: 15, label: '15 días' },
+            { value: 30, label: '30 días' },
+            { value: 60, label: '60 días' },
+            { value: 90, label: '90 días' },
+          ]}
+        />
+        <ExportButton
+          filename="vencimientos"
+          columns={[
+            { label: 'Tipo', key: 'tipo' },
+            { label: 'Lote', key: 'lote' },
+            { label: 'Artículo', key: 'articulo' },
+            { label: 'Código', key: 'codigo' },
+            { label: 'Stock', key: 'stock' },
+            { label: 'Unidad', key: 'unidad' },
+            { label: 'Vencimiento', key: 'vence' },
+            { label: 'Estado', key: 'estado' },
+            { label: 'Días restantes', key: 'dias' },
+          ]}
+          data={exportData}
+        />
       </div>
 
       {/* Resumen */}

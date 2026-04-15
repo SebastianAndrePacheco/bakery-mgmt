@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Supplier, Supply, Unit } from '@/utils/types/database.types'
 import { Plus, Trash2 } from 'lucide-react'
-import { calculateSubtotalFromTotal, calculateIGV, formatCurrency } from '@/utils/helpers/currency'
+import { calculateSubtotalFromTotal, formatCurrency } from '@/utils/helpers/currency'
+import { createPurchaseOrder } from '@/app/actions'
+import { toast } from 'sonner'
 
 interface SupplyWithUnit extends Supply {
   unit?: Unit
@@ -26,7 +27,6 @@ interface OrderItem {
 
 export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     supplier_id: '',
@@ -48,7 +48,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     }
   }
 
-  const updateItem = (index: number, field: keyof OrderItem, value: any) => {
+  const updateItem = (index: number, field: keyof OrderItem, value: number | string) => {
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: value }
     
@@ -72,50 +72,39 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
       // Validar que haya al menos un item con datos
       const validItems = items.filter(item => item.supply_id && item.quantity > 0)
       if (validItems.length === 0) {
-        alert('Debe agregar al menos un insumo a la orden')
+        toast.error('Debe agregar al menos un insumo a la orden')
         setLoading(false)
         return
       }
 
-      // El total que tenemos YA incluye IGV
       const totalWithIGV = calculateTotalWithIGV()
-      
-      // Calculamos el subtotal (sin IGV) a partir del total
       const subtotal = calculateSubtotalFromTotal(totalWithIGV)
-      
-      // El IGV es la diferencia
       const tax = totalWithIGV - subtotal
-      
-      const total = totalWithIGV
 
-      const orderNumber = `OC-${Date.now()}`
-
-      const itemsPayload = validItems.map(item => ({
-        supply_id:  item.supply_id,
-        quantity:   item.quantity,
-        unit_price: item.unit_price,
-        total:      item.total,
-      }))
-
-      // Llamada atómica: orden + ítems en una sola transacción
-      const { error } = await supabase.rpc('create_purchase_order_with_items', {
-        p_supplier_id:             formData.supplier_id,
-        p_order_date:              formData.order_date,
-        p_expected_delivery_date:  formData.expected_delivery_date,
-        p_notes:                   formData.notes,
-        p_order_number:            orderNumber,
-        p_subtotal:                subtotal,
-        p_tax:                     tax,
-        p_total:                   total,
-        p_items:                   itemsPayload,
+      const result = await createPurchaseOrder({
+        supplier_id:            formData.supplier_id,
+        order_date:             formData.order_date,
+        expected_delivery_date: formData.expected_delivery_date,
+        notes:                  formData.notes,
+        subtotal,
+        tax,
+        total:                  totalWithIGV,
+        items: validItems.map(item => ({
+          supply_id:  item.supply_id,
+          quantity:   item.quantity,
+          unit_price: item.unit_price,
+          total:      item.total,
+        })),
       })
 
-      if (error) throw error
+      if ('error' in result) {
+        toast.error('Error al crear orden: ' + result.error)
+        return
+      }
 
+      toast.success('Orden de compra creada correctamente')
       router.push('/compras/ordenes')
       router.refresh()
-    } catch (error: any) {
-      alert('Error al crear orden: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -228,7 +217,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
                 </label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="any"
                   min="0"
                   value={item.quantity || ''}
                   onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
@@ -242,7 +231,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
                 </label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="any"
                   min="0"
                   value={item.unit_price || ''}
                   onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}

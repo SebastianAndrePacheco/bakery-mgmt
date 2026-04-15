@@ -4,13 +4,40 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, TrendingDown } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency } from '@/utils/helpers/currency'
+import { ExportButton } from '@/components/ui/export-button'
+import { MonthSelector } from '@/components/ui/month-selector'
 
-export default async function ConsumoInsumosPage() {
+export default async function ConsumoInsumosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>
+}) {
+  const { mes } = await searchParams
   const supabase = await createClient()
 
-  // Obtener consumo del mes actual
   const now = new Date()
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  let year = now.getFullYear()
+  let month = now.getMonth() + 1
+
+  if (mes) {
+    const [y, m] = mes.split('-').map(Number)
+    if (y && m) { year = y; month = m }
+  }
+
+  const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+  const nextMonth = month === 12
+    ? `${year + 1}-01-01`
+    : `${year}-${String(month + 1).padStart(2, '0')}-01`
+
+  const mesLabel = new Date(year, month - 1, 1).toLocaleDateString('es-PE', { month: 'long', year: 'numeric' })
+
+  const monthOptions = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    return {
+      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' }),
+    }
+  })
 
   // Primero obtener los movimientos
   const { data: movements } = await supabase
@@ -20,46 +47,61 @@ export default async function ConsumoInsumosPage() {
     .eq('movement_reason', 'produccion')
     .eq('entity_type', 'insumo')
     .gte('movement_date', monthStart)
+    .lt('movement_date', nextMonth)
 
   // Obtener todos los supplies
   const { data: supplies } = await supabase
     .from('supplies')
     .select('id, code, name, unit:units(symbol)')
 
-  // Crear un map de supplies por ID
-  const suppliesMap = supplies?.reduce((acc: any, supply: any) => {
-    acc[supply.id] = supply
-    return acc
-  }, {}) || {}
+  type SupplyRef = { id: string; code: string; name: string; unit: { symbol: string } | null }
+  type ConsumptionRow = {
+    supply: SupplyRef
+    total_quantity: number
+    total_cost: number
+    movements: number
+  }
 
-  // Combinar manualmente
-  const consumptions = movements?.map(m => ({
-    ...m,
-    supply: suppliesMap[m.entity_id]
-  })).filter(m => m.supply) || []
+  const suppliesMap: Record<string, SupplyRef> = Object.fromEntries(
+    (supplies ?? []).map((s) => [s.id, s as unknown as SupplyRef])
+  )
 
-  // Agrupar por insumo
-  const consumptionBySupply = consumptions.reduce((acc: any, movement: any) => {
+  const consumptions = (movements ?? [])
+    .map((m) => ({ ...m, supply: suppliesMap[m.entity_id] }))
+    .filter((m) => m.supply)
+
+  const consumptionBySupply: Record<string, ConsumptionRow> = {}
+  for (const movement of consumptions) {
     const supplyId = movement.entity_id
-    if (!acc[supplyId]) {
-      acc[supplyId] = {
+    if (!consumptionBySupply[supplyId]) {
+      consumptionBySupply[supplyId] = {
         supply: movement.supply,
         total_quantity: 0,
         total_cost: 0,
-        movements: 0
+        movements: 0,
       }
     }
-    acc[supplyId].total_quantity += movement.quantity
-    acc[supplyId].total_cost += movement.total_cost || 0
-    acc[supplyId].movements += 1
-    return acc
-  }, {})
+    consumptionBySupply[supplyId].total_quantity += movement.quantity
+    consumptionBySupply[supplyId].total_cost += movement.total_cost || 0
+    consumptionBySupply[supplyId].movements += 1
+  }
 
   const consumptionList = Object.values(consumptionBySupply).sort(
-    (a: any, b: any) => b.total_cost - a.total_cost
+    (a, b) => b.total_cost - a.total_cost
   )
 
-  const totalCost = consumptionList.reduce((sum: number, item: any) => sum + item.total_cost, 0)
+  const totalCost = consumptionList.reduce((sum, item) => sum + item.total_cost, 0)
+
+  const exportData = consumptionList.map(item => ({
+    codigo: item.supply.code,
+    insumo: item.supply.name,
+    cantidad_total: item.total_quantity.toFixed(3),
+    unidad: item.supply.unit?.symbol ?? '',
+    costo_total: item.total_cost.toFixed(2),
+    costo_promedio: (item.total_quantity > 0 ? item.total_cost / item.total_quantity : 0).toFixed(4),
+    movimientos: item.movements,
+    porcentaje: (totalCost > 0 ? (item.total_cost / totalCost) * 100 : 0).toFixed(1),
+  }))
 
   return (
     <div className="space-y-6">
@@ -69,12 +111,25 @@ export default async function ConsumoInsumosPage() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold">Consumo de Insumos</h1>
-          <p className="text-muted-foreground">
-            Análisis del mes actual ({new Date().toLocaleDateString('es-PE', { month: 'long', year: 'numeric' })})
-          </p>
+          <p className="text-muted-foreground capitalize">{mesLabel}</p>
         </div>
+        <ExportButton
+          filename={`consumo_insumos_${mes || monthOptions[0].value}`}
+          columns={[
+            { label: 'Código', key: 'codigo' },
+            { label: 'Insumo', key: 'insumo' },
+            { label: 'Cantidad Total', key: 'cantidad_total' },
+            { label: 'Unidad', key: 'unidad' },
+            { label: 'Costo Total (S/)', key: 'costo_total' },
+            { label: 'Costo Promedio (S/)', key: 'costo_promedio' },
+            { label: 'Movimientos', key: 'movimientos' },
+            { label: '% del Total', key: 'porcentaje' },
+          ]}
+          data={exportData}
+        />
+        <MonthSelector options={monthOptions} current={mes || monthOptions[0].value} />
       </div>
 
       {/* Resumen */}
@@ -136,7 +191,7 @@ export default async function ConsumoInsumosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {consumptionList.map((item: any) => {
+                  {consumptionList.map((item) => {
                     const avgCost = item.total_quantity > 0 ? item.total_cost / item.total_quantity : 0
                     const percentage = totalCost > 0 ? (item.total_cost / totalCost) * 100 : 0
 

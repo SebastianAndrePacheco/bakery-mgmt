@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Product, Unit } from '@/utils/types/database.types'
 import { Factory, AlertCircle } from 'lucide-react'
 import { createProductionOrder } from '@/app/actions'
+import { useConfirm } from '@/components/ui/confirm-dialog'
+import { toast } from 'sonner'
 
 interface ProductWithUnit extends Product {
   unit?: Unit
@@ -19,6 +21,7 @@ interface ProductionOrderFormProps {
 export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
   const router = useRouter()
   const supabase = createClient()
+  const { confirm, dialog } = useConfirm()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<ProductWithUnit | null>(null)
@@ -97,12 +100,14 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
     e.preventDefault()
 
     if (stockWarnings.length > 0) {
-      const confirm = window.confirm(
-        `⚠️ ADVERTENCIA: Faltan insumos para esta producción.\n\n` +
-        stockWarnings.map(w => `${w.supply}: Faltan ${w.shortage} ${w.unit}`).join('\n') +
-        `\n\n¿Deseas crear la orden de todos modos?`
-      )
-      if (!confirm) return
+      const shortage = stockWarnings.map(w => `${w.supply}: faltan ${w.shortage} ${w.unit}`).join(', ')
+      const ok = await confirm({
+        title: 'Stock insuficiente',
+        description: `Faltan insumos: ${shortage}. ¿Crear la orden de todos modos?`,
+        confirmLabel: 'Crear orden igual',
+        variant: 'warning',
+      })
+      if (!ok) return
     }
 
     setLoading(true)
@@ -122,11 +127,14 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
       return
     }
 
+    toast.success('Orden de producción creada correctamente')
     router.push('/produccion/ordenes')
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <>
+      {dialog}
+      <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <label className="text-sm font-medium">
@@ -187,8 +195,8 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
             <input
               type="number"
               required
-              step="0.01"
-              min="0.01"
+              step="any"
+              min="0.001"
               value={formData.quantity_planned}
               onChange={(e) => setFormData({ ...formData, quantity_planned: e.target.value })}
               placeholder="5"
@@ -278,5 +286,6 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
         </Button>
       </div>
     </form>
+    </>
   )
 }

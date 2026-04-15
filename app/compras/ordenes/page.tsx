@@ -2,25 +2,37 @@ import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/pagination'
+import { SearchInput } from '@/components/ui/search-input'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { PurchaseOrdersTable } from '@/components/tables/purchase-orders-table'
+import { Suspense } from 'react'
 
 const PAGE_SIZE = 20
 
 export default async function PurchaseOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; q?: string }>
 }) {
-  const { page: pageParam } = await searchParams
+  const { page: pageParam, q } = await searchParams
   const page = Math.max(1, parseInt(pageParam || '1'))
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
 
   const supabase = await createClient()
 
-  const { data: orders, count, error } = await supabase
+  // Si hay búsqueda por proveedor, obtener IDs coincidentes primero
+  let supplierIds: string[] | null = null
+  if (q) {
+    const { data: matched } = await supabase
+      .from('suppliers')
+      .select('id')
+      .ilike('business_name', `%${q}%`)
+    supplierIds = matched?.map(s => s.id) ?? []
+  }
+
+  let query = supabase
     .from('purchase_orders')
     .select(`
       *,
@@ -28,6 +40,16 @@ export default async function PurchaseOrdersPage({
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to)
+
+  if (q) {
+    if (supplierIds && supplierIds.length > 0) {
+      query = query.or(`order_number.ilike.%${q}%,supplier_id.in.(${supplierIds.join(',')})`)
+    } else {
+      query = query.ilike('order_number', `%${q}%`)
+    }
+  }
+
+  const { data: orders, count, error } = await query
 
   if (error) {
     console.error('Error fetching purchase orders:', error)
@@ -54,10 +76,17 @@ export default async function PurchaseOrdersPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Órdenes de Compra</CardTitle>
-          <CardDescription>
-            {count || 0} órdenes registradas
-          </CardDescription>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle>Lista de Órdenes de Compra</CardTitle>
+              <CardDescription>{count || 0} órdenes{q ? ` para "${q}"` : ''}</CardDescription>
+            </div>
+            <div className="w-64">
+              <Suspense>
+                <SearchInput placeholder="N° orden o proveedor..." />
+              </Suspense>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <PurchaseOrdersTable orders={orders || []} />

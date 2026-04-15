@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { ProductionOrderForm } from '@/components/forms/production-order-form'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function NewProductionOrderPage() {
   const supabase = await createClient()
@@ -24,6 +25,11 @@ export default async function NewProductionOrderPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Producción', href: '/produccion' },
+        { label: 'Órdenes', href: '/produccion/ordenes' },
+        { label: 'Nueva Orden' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/produccion/ordenes">
           <Button variant="ghost" size="icon">

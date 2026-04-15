@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArrowLeft } from 'lucide-react'
 import { UserEditForm } from '@/components/forms/user-edit-form'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function EditarUsuarioPage({
   params,
@@ -40,6 +41,10 @@ export default async function EditarUsuarioPage({
 
   return (
     <div className="space-y-6 max-w-xl">
+      <Breadcrumb items={[
+        { label: 'Usuarios', href: '/usuarios' },
+        { label: profile.full_name || email },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/usuarios">
           <Button variant="ghost" size="icon">

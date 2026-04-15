@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { formatCurrency } from '@/utils/helpers/currency'
 import { formatDate } from '@/utils/helpers/dates'
 import { MonthSelector } from '@/components/ui/month-selector'
+import { ExportButton } from '@/components/ui/export-button'
 
 export default async function MermasPage({
   searchParams,
@@ -90,6 +91,18 @@ export default async function MermasPage({
     ajuste_inventario: 'Ajuste Inventario',
   }
 
+  const exportData = enriched.map(m => ({
+    fecha: m.movement_date,
+    tipo: m.entity_type,
+    articulo: m.entity?.name ?? '',
+    codigo: m.entity?.code ?? '',
+    cantidad: (m.quantity ?? 0).toFixed(3),
+    unidad: m.entity?.unit?.symbol ?? '',
+    razon: reasonLabel[m.movement_reason] ?? m.movement_reason,
+    costo: (m.total_cost ?? 0).toFixed(2),
+    notas: m.notes ?? '',
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -102,6 +115,21 @@ export default async function MermasPage({
           <h1 className="text-3xl font-bold">Mermas y Pérdidas</h1>
           <p className="text-muted-foreground capitalize">{mesLabel}</p>
         </div>
+        <ExportButton
+          filename={`mermas_${mes || monthOptions[0].value}`}
+          columns={[
+            { label: 'Fecha', key: 'fecha' },
+            { label: 'Tipo', key: 'tipo' },
+            { label: 'Artículo', key: 'articulo' },
+            { label: 'Código', key: 'codigo' },
+            { label: 'Cantidad', key: 'cantidad' },
+            { label: 'Unidad', key: 'unidad' },
+            { label: 'Razón', key: 'razon' },
+            { label: 'Costo (S/)', key: 'costo' },
+            { label: 'Notas', key: 'notas' },
+          ]}
+          data={exportData}
+        />
         <MonthSelector options={monthOptions} current={mes || monthOptions[0].value} />
       </div>
 

@@ -4,6 +4,7 @@ import { PurchaseOrderForm } from '@/components/forms/purchase-order-form'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function NewPurchaseOrderPage() {
   const supabase = await createClient()
@@ -27,6 +28,11 @@ export default async function NewPurchaseOrderPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Compras', href: '/compras' },
+        { label: 'Órdenes de Compra', href: '/compras/ordenes' },
+        { label: 'Nueva Orden' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/compras/ordenes">
           <Button variant="ghost" size="icon">

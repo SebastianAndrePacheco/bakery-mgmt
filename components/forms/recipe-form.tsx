@@ -80,7 +80,7 @@ export function RecipeForm({ productId, supplies }: RecipeFormProps) {
             <input
               type="number"
               required
-              step="0.001"
+              step="any"
               min="0.001"
               value={formData.quantity}
               onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}

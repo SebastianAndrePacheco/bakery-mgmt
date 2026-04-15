@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { AdjustmentForm } from '@/components/forms/adjustment-form'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function NewAdjustmentPage() {
   const supabase = await createClient()
@@ -24,6 +25,11 @@ export default async function NewAdjustmentPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Inventario', href: '/inventario' },
+        { label: 'Ajustes', href: '/inventario/ajustes' },
+        { label: 'Nuevo Ajuste' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/inventario/ajustes">
           <Button variant="ghost" size="icon">

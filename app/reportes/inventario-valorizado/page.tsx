@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, TrendingUp, Package, ShoppingBag } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency } from '@/utils/helpers/currency'
+import { ExportButton } from '@/components/ui/export-button'
 
 export default async function InventarioValorizadoPage() {
   const supabase = await createClient()
@@ -23,25 +24,42 @@ export default async function InventarioValorizadoPage() {
     0
   ) || 0
 
-  // Agrupar insumos por categoría
-  const suppliesByCategory = supplyBatches?.reduce((acc: any, batch: any) => {
+  type SupplyBatch = {
+    id: string
+    current_quantity: number
+    unit_price: number
+    supply?: {
+      code: string
+      name: string
+      category?: { name: string } | null
+      unit?: { symbol: string } | null
+    } | null
+  }
+  type CategoryGroup = {
+    category: string
+    batches: (SupplyBatch & { value: number })[]
+    total_quantity: number
+    total_value: number
+  }
+
+  const suppliesByCategory: Record<string, CategoryGroup> = {}
+  for (const batch of (supplyBatches ?? []) as unknown as SupplyBatch[]) {
     const category = batch.supply?.category?.name || 'Sin categoría'
-    if (!acc[category]) {
-      acc[category] = {
+    if (!suppliesByCategory[category]) {
+      suppliesByCategory[category] = {
         category,
         batches: [],
         total_quantity: 0,
-        total_value: 0
+        total_value: 0,
       }
     }
     const batchValue = batch.current_quantity * batch.unit_price
-    acc[category].batches.push({ ...batch, value: batchValue })
-    acc[category].total_value += batchValue
-    return acc
-  }, {}) || {}
+    suppliesByCategory[category].batches.push({ ...batch, value: batchValue })
+    suppliesByCategory[category].total_value += batchValue
+  }
 
   const supplyCategoryList = Object.values(suppliesByCategory).sort(
-    (a: any, b: any) => b.total_value - a.total_value
+    (a, b) => b.total_value - a.total_value
   )
 
   // Valor de productos terminados
@@ -58,6 +76,51 @@ export default async function InventarioValorizadoPage() {
 
   const totalInventoryValue = supplyValue + productValue
 
+  const exportData = [
+    ...(supplyCategoryList.flatMap(cat =>
+      cat.batches.map(b => ({
+        tipo: 'Insumo',
+        categoria: cat.category,
+        codigo: b.supply?.code ?? '',
+        articulo: b.supply?.name ?? '',
+        stock: b.current_quantity.toFixed(2),
+        unidad: b.supply?.unit?.symbol ?? '',
+        precio_unit: b.unit_price.toFixed(4),
+        valor: b.value.toFixed(2),
+      }))
+    )),
+    ...(productBatches ?? []).map(b => {
+      const pb = b as unknown as {
+        batch_code: string
+        current_quantity: number
+        unit_cost?: number | null
+        total_cost?: number | null
+        product?: { code?: string; name?: string; unit?: { symbol?: string } | null } | null
+      }
+      return {
+        tipo: 'Producto Terminado',
+        categoria: '',
+        codigo: pb.product?.code ?? '',
+        articulo: pb.product?.name ?? '',
+        stock: pb.current_quantity.toFixed(2),
+        unidad: pb.product?.unit?.symbol ?? '',
+        precio_unit: (pb.unit_cost ?? 0).toFixed(4),
+        valor: (pb.total_cost ?? 0).toFixed(2),
+      }
+    }),
+  ]
+
+  const exportColumns = [
+    { label: 'Tipo', key: 'tipo' },
+    { label: 'Categoría', key: 'categoria' },
+    { label: 'Código', key: 'codigo' },
+    { label: 'Artículo', key: 'articulo' },
+    { label: 'Stock', key: 'stock' },
+    { label: 'Unidad', key: 'unidad' },
+    { label: 'Precio Unit.', key: 'precio_unit' },
+    { label: 'Valor (S/)', key: 'valor' },
+  ]
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -66,12 +129,17 @@ export default async function InventarioValorizadoPage() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold">Inventario Valorizado</h1>
           <p className="text-muted-foreground">
             Valor actual del inventario al {new Date().toLocaleDateString('es-PE')}
           </p>
         </div>
+        <ExportButton
+          filename="inventario_valorizado"
+          columns={exportColumns}
+          data={exportData}
+        />
       </div>
 
       {/* Resumen */}
@@ -137,7 +205,7 @@ export default async function InventarioValorizadoPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {supplyCategoryList.map((cat: any) => (
+              {supplyCategoryList.map((cat) => (
                 <div key={cat.category} className="border border-slate-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-lg text-slate-900">{cat.category}</h3>
@@ -157,16 +225,16 @@ export default async function InventarioValorizadoPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {cat.batches.map((batch: any) => (
+                        {cat.batches.map((batch) => (
                           <tr key={batch.id} className="hover:bg-slate-50">
                             <td className="py-2 px-3 font-mono text-slate-600">
-                              {batch.supply.code}
+                              {batch.supply?.code}
                             </td>
                             <td className="py-2 px-3 text-slate-900">
-                              {batch.supply.name}
+                              {batch.supply?.name}
                             </td>
                             <td className="py-2 px-3 text-right text-slate-700">
-                              {batch.current_quantity.toFixed(2)} {batch.supply.unit?.symbol}
+                              {batch.current_quantity.toFixed(2)} {batch.supply?.unit?.symbol}
                             </td>
                             <td className="py-2 px-3 text-right text-slate-600">
                               {formatCurrency(batch.unit_price)}
@@ -215,7 +283,7 @@ export default async function InventarioValorizadoPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {productBatches.map((batch: any) => (
+                  {productBatches.map((batch) => (
                     <tr key={batch.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4 font-mono text-sm text-slate-900">
                         {batch.batch_code}

@@ -4,8 +4,10 @@ import { ProductRecipe, Supply, Unit } from '@/utils/types/database.types'
 import { Trash2, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { useState } from 'react'
+import { deleteRecipeItem } from '@/app/actions'
+import { useConfirm } from '@/components/ui/confirm-dialog'
+import { toast } from 'sonner'
 
 interface RecipeItemWithRelations extends ProductRecipe {
   supply?: Supply & { unit?: Unit }
@@ -20,26 +22,27 @@ interface RecipeTableProps {
 
 export function RecipeTable({ recipeItems, productId, productUnit }: RecipeTableProps) {
   const router = useRouter()
-  const supabase = createClient()
+  const { confirm, dialog } = useConfirm()
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  const handleDelete = async (recipeId: string) => {
-    if (!confirm('¿Estás seguro de eliminar este ingrediente de la receta?')) {
-      return
-    }
+  const handleDelete = async (recipeId: string, supplyName: string) => {
+    const ok = await confirm({
+      title: 'Eliminar ingrediente',
+      description: `¿Eliminar "${supplyName}" de la receta? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+      variant: 'danger',
+    })
+    if (!ok) return
 
     setDeleting(recipeId)
     try {
-      const { error } = await supabase
-        .from('product_recipes')
-        .delete()
-        .eq('id', recipeId)
-
-      if (error) throw error
-
+      const result = await deleteRecipeItem(recipeId)
+      if ('error' in result) {
+        toast.error('Error al eliminar: ' + result.error)
+        return
+      }
+      toast.success(`"${supplyName}" eliminado de la receta`)
       router.refresh()
-    } catch (error: any) {
-      alert('Error al eliminar: ' + error.message)
     } finally {
       setDeleting(null)
     }
@@ -58,7 +61,9 @@ export function RecipeTable({ recipeItems, productId, productUnit }: RecipeTable
   }
 
   return (
-    <div className="space-y-4">
+    <>
+      {dialog}
+      <div className="space-y-4">
       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
         <p className="text-sm text-blue-700">
           <strong>Nota:</strong> Las cantidades están expresadas para producir <strong>1 {productUnit?.symbol}</strong> de producto terminado.
@@ -121,7 +126,7 @@ export function RecipeTable({ recipeItems, productId, productUnit }: RecipeTable
                       variant="ghost" 
                       size="icon"
                       className="hover:bg-red-50 hover:text-red-600"
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => handleDelete(item.id, item.supply?.name ?? '')}
                       disabled={deleting === item.id}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -134,5 +139,6 @@ export function RecipeTable({ recipeItems, productId, productUnit }: RecipeTable
         </table>
       </div>
     </div>
+    </>
   )
 }

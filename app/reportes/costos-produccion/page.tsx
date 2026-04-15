@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { formatCurrency } from '@/utils/helpers/currency'
 import { formatDate } from '@/utils/helpers/dates'
 import { MonthSelector } from '@/components/ui/month-selector'
+import { ExportButton } from '@/components/ui/export-button'
 
 export default async function CostosProduccionPage({
   searchParams,
@@ -97,6 +98,17 @@ export default async function CostosProduccionPage({
   const productSummaries = Array.from(productMap.values())
     .sort((a, b) => b.totalCost - a.totalCost)
 
+  const exportData = (batches ?? []).map(b => ({
+    fecha: b.production_date,
+    lote: b.batch_code,
+    producto: (b as unknown as { product?: { name?: string } | null }).product?.name ?? '',
+    codigo: (b as unknown as { product?: { code?: string } | null }).product?.code ?? '',
+    cantidad: (b.quantity_produced ?? 0).toFixed(2),
+    unidad: (b as unknown as { product?: { unit?: { symbol?: string } | null } | null }).product?.unit?.symbol ?? '',
+    costo_unitario: b.unit_cost ? b.unit_cost.toFixed(4) : '',
+    costo_total: b.total_cost ? b.total_cost.toFixed(2) : '',
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -111,6 +123,20 @@ export default async function CostosProduccionPage({
             Análisis de {selectedLabel}
           </p>
         </div>
+        <ExportButton
+          filename={`costos_produccion_${selectedMonth}`}
+          columns={[
+            { label: 'Fecha', key: 'fecha' },
+            { label: 'Lote', key: 'lote' },
+            { label: 'Producto', key: 'producto' },
+            { label: 'Código', key: 'codigo' },
+            { label: 'Cantidad', key: 'cantidad' },
+            { label: 'Unidad', key: 'unidad' },
+            { label: 'Costo Unit. (S/)', key: 'costo_unitario' },
+            { label: 'Costo Total (S/)', key: 'costo_total' },
+          ]}
+          data={exportData}
+        />
         <MonthSelector options={monthOptions} current={selectedMonth} />
       </div>
 
@@ -234,7 +260,7 @@ export default async function CostosProduccionPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {batches.map((batch: any) => (
+                  {(batches ?? []).map((batch) => (
                     <tr key={batch.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4 text-sm text-slate-600">
                         {formatDate(batch.production_date)}

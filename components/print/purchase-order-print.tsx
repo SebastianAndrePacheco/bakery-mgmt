@@ -4,9 +4,21 @@ import { PurchaseOrder, Supplier } from '@/utils/types/database.types'
 import { formatCurrency } from '@/utils/helpers/currency'
 import { formatDate } from '@/utils/helpers/dates'
 
+interface PrintOrderItem {
+  id: string
+  quantity: number
+  unit_price: number
+  total: number
+  supply: {
+    code: string
+    name: string
+    unit?: { symbol: string } | null
+  }
+}
+
 interface PurchaseOrderPrintProps {
   order: PurchaseOrder & { supplier?: Supplier }
-  items: any[]
+  items: PrintOrderItem[]
 }
 
 export function PurchaseOrderPrint({ order, items }: PurchaseOrderPrintProps) {
@@ -27,26 +39,14 @@ export function PurchaseOrderPrint({ order, items }: PurchaseOrderPrintProps) {
       </button>
 
       {/* Estilos de impresión */}
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          #print-area,
-          #print-area * {
-            visibility: visible;
-          }
-          #print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          @page {
-            margin: 2cm;
-          }
+          body * { visibility: hidden; }
+          #print-area, #print-area * { visibility: visible; }
+          #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          @page { margin: 2cm; }
         }
-      `}</style>
+      ` }} />
 
       {/* Área de impresión (oculta en pantalla) */}
       <div id="print-area" className="hidden print:block">
@@ -112,7 +112,7 @@ export function PurchaseOrderPrint({ order, items }: PurchaseOrderPrintProps) {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item: any, index) => (
+                {items.map((item) => (
                   <tr key={item.id}>
                     <td className="border border-slate-300 px-3 py-2 text-sm">{item.supply.code}</td>
                     <td className="border border-slate-300 px-3 py-2 text-sm">

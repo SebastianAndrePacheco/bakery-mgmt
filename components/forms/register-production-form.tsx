@@ -2,19 +2,31 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Factory, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { completeProductionOrder } from '@/app/actions'
+
+interface ProductionOrderInput {
+  id: string
+  quantity_planned: number
+  product: {
+    name: string
+    shelf_life_days: number
+    unit: { symbol: string }
+  }
+}
 
 interface RegisterProductionFormProps {
-  order: any
-  ingredients: any[]
+  order: ProductionOrderInput
+  ingredients: unknown[]
   canProduce: boolean
 }
 
-export function RegisterProductionForm({ order, ingredients, canProduce }: RegisterProductionFormProps) {
+export function RegisterProductionForm({ order, canProduce }: RegisterProductionFormProps) {
   const router = useRouter()
-  const supabase = createClient()
+  const { confirm, dialog } = useConfirm()
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -27,70 +39,59 @@ export function RegisterProductionForm({ order, ingredients, canProduce }: Regis
     e.preventDefault()
 
     if (!canProduce) {
-      alert('❌ No puedes producir porque faltan insumos')
+      toast.error('No se puede producir — faltan insumos en stock')
       return
     }
 
-    const confirm = window.confirm(
-      `¿Confirmar producción de ${formData.quantity_produced} ${order.product.unit.symbol} de ${order.product.name}?\n\n` +
-      `Esto consumirá los insumos automáticamente usando FIFO (primero los lotes más viejos).`
-    )
-
-    if (!confirm) return
+    const ok = await confirm({
+      title: 'Confirmar producción',
+      description: `Se producirán ${formData.quantity_produced} ${order.product.unit.symbol} de ${order.product.name}. Los insumos se consumirán automáticamente (FIFO).`,
+      confirmLabel: 'Ejecutar producción',
+      variant: 'default',
+    })
+    if (!ok) return
 
     setLoading(true)
 
     try {
-      // Llamada atómica: FIFO + lote de producto + kardex + estado de orden
-      // El costo real se calcula dentro de la función con los lotes FIFO consumidos
-      const { data, error } = await supabase.rpc('complete_production_order', {
-        p_order_id:          order.id,
-        p_quantity_produced: parseFloat(formData.quantity_produced),
-        p_production_date:   formData.production_date,
-        p_notes:             formData.notes || '',
+      const response = await completeProductionOrder({
+        order_id:          order.id,
+        quantity_produced: parseFloat(formData.quantity_produced),
+        production_date:   formData.production_date,
+        notes:             formData.notes || '',
       })
 
-      if (error) throw error
-
-      const result = data as {
-        batch_code: string
-        quantity_produced: number
-        total_cost: number
-        unit_cost: number
-        expiration_date: string
+      if ('error' in response) {
+        toast.error('Error al registrar producción: ' + response.error)
+        return
       }
 
+      const result = response.data
       const expirationFormatted = new Date(result.expiration_date + 'T00:00:00')
         .toLocaleDateString('es-PE')
 
-      alert(
-        `✅ Producción registrada exitosamente!\n\n` +
-        `Producto: ${order.product.name}\n` +
-        `Cantidad: ${result.quantity_produced} ${order.product.unit.symbol}\n` +
-        `Lote: ${result.batch_code}\n` +
-        `Costo Total: S/ ${Number(result.total_cost).toFixed(2)}\n` +
-        `Vence: ${expirationFormatted}`
+      toast.success(
+        `Producción registrada — Lote ${result.batch_code} · Vence ${expirationFormatted} · Costo S/ ${Number(result.total_cost).toFixed(2)}`,
+        { duration: 6000 }
       )
 
       router.push('/produccion/ordenes')
       router.refresh()
-
-    } catch (error: any) {
-      console.error('Error al registrar producción:', error)
-      alert('❌ Error al registrar producción: ' + error.message)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <>
+      {dialog}
+      <form onSubmit={handleSubmit} className="space-y-6">
       {!canProduce && (
         <div className="bg-red-50 p-4 rounded-lg border border-red-200">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-red-900 mb-1">❌ No se puede producir</h3>
+              <h3 className="font-semibold text-red-900 mb-1">No se puede producir</h3>
               <p className="text-sm text-red-700">
                 Faltan insumos. Debes recibir más stock antes de producir.
               </p>
@@ -122,8 +123,8 @@ export function RegisterProductionForm({ order, ingredients, canProduce }: Regis
             <input
               type="number"
               required
-              step="0.01"
-              min="0.01"
+              step="any"
+              min="0.001"
               max={order.quantity_planned}
               value={formData.quantity_produced}
               onChange={(e) => setFormData({ ...formData, quantity_produced: e.target.value })}
@@ -151,7 +152,7 @@ export function RegisterProductionForm({ order, ingredients, canProduce }: Regis
       </div>
 
       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-        <h4 className="font-semibold text-blue-900 mb-2">📋 Al confirmar se ejecutará:</h4>
+        <h4 className="font-semibold text-blue-900 mb-2">Al confirmar se ejecutará:</h4>
         <ul className="text-sm text-blue-700 space-y-1">
           <li>✓ Consumo de insumos con FIFO (primero lotes más viejos)</li>
           <li>✓ Actualización de stock de insumos</li>
@@ -181,5 +182,6 @@ export function RegisterProductionForm({ order, ingredients, canProduce }: Regis
         </Button>
       </div>
     </form>
+    </>
   )
 }

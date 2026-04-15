@@ -2,18 +2,32 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Package } from 'lucide-react'
+import { toast } from 'sonner'
+import { receivePurchaseOrder } from '@/app/actions'
+
+interface ReceiveOrderItem {
+  id: string
+  supply_id: string
+  quantity: number
+  unit_price: number
+  supply: {
+    name: string
+    code: string
+    unit?: { symbol: string } | null
+  }
+}
 
 interface ReceiveOrderFormProps {
-  order: any
-  items: any[]
+  order: { id: string; total: number; order_number: string }
+  items: ReceiveOrderItem[]
 }
 
 export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
   const router = useRouter()
-  const supabase = createClient()
+  const { confirm, dialog } = useConfirm()
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -35,62 +49,63 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const confirm = window.confirm(
-      '¿Confirmar recepción de mercancía?\n\nEsto creará los lotes de inventario y actualizará el stock.'
-    )
-    if (!confirm) return
+    const itemsPayload = items
+      .filter(item => parseFloat(receivedQuantities[item.id] || '0') > 0)
+      .map(item => ({
+        supply_id:         item.supply_id,
+        quantity_received: parseFloat(receivedQuantities[item.id] || '0'),
+        unit_price:        item.unit_price,
+        expiration_date:   expirationDates[item.id] || '',
+      }))
+
+    if (itemsPayload.length === 0) {
+      toast.error('Ingresa al menos una cantidad recibida mayor a 0')
+      return
+    }
+
+    const ok = await confirm({
+      title: 'Confirmar recepción de mercancía',
+      description: `Se crearán ${itemsPayload.length} lote(s) de inventario y se actualizará el stock. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Confirmar recepción',
+      variant: 'default',
+    })
+    if (!ok) return
 
     setLoading(true)
 
     try {
-      // Construir array de ítems para la función RPC
-      const itemsPayload = items
-        .filter(item => parseFloat(receivedQuantities[item.id] || '0') > 0)
-        .map(item => ({
-          supply_id:         item.supply_id,
-          batch_code:        `LOTE-${order.order_number}-${item.supply.code}-${Date.now()}`,
-          quantity_received: parseFloat(receivedQuantities[item.id] || '0'),
-          unit_price:        item.unit_price,
-          expiration_date:   expirationDates[item.id] || '',
-        }))
+      const result = await receivePurchaseOrder({
+        order_id:           order.id,
+        received_date:      formData.received_date,
+        guia_remision:      formData.guia_remision,
+        comprobante_tipo:   formData.comprobante_tipo,
+        comprobante_serie:  formData.comprobante_serie,
+        comprobante_numero: formData.comprobante_numero,
+        comprobante_fecha:  formData.comprobante_fecha,
+        comprobante_monto:  parseFloat(formData.comprobante_monto),
+        items:              itemsPayload,
+      })
 
-      if (itemsPayload.length === 0) {
-        alert('Debe ingresar al menos una cantidad recibida mayor a 0')
+      if ('error' in result) {
+        toast.error('Error al registrar recepción: ' + result.error)
         return
       }
 
-      // Llamada atómica: orden + lotes + kardex en una sola transacción
-      const { error } = await supabase.rpc('receive_purchase_order', {
-        p_order_id:           order.id,
-        p_received_date:      formData.received_date,
-        p_guia_remision:      formData.guia_remision,
-        p_comprobante_tipo:   formData.comprobante_tipo,
-        p_comprobante_serie:  formData.comprobante_serie,
-        p_comprobante_numero: formData.comprobante_numero,
-        p_comprobante_fecha:  formData.comprobante_fecha,
-        p_comprobante_monto:  parseFloat(formData.comprobante_monto),
-        p_items:              itemsPayload,
-      })
-
-      if (error) throw error
-
-      alert('✅ Recepción registrada exitosamente!')
+      toast.success('Recepción registrada — stock actualizado correctamente')
       router.push('/compras/ordenes')
       router.refresh()
-
-    } catch (error: any) {
-      console.error('Error al registrar recepción:', error)
-      alert('❌ Error al registrar recepción: ' + error.message)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <>
+      {dialog}
+      <form onSubmit={handleSubmit} className="space-y-6">
       {/* Documentos Peruanos */}
       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-        <h3 className="font-semibold text-blue-900 mb-4">📄 Documentos de Recepción (Perú)</h3>
+        <h3 className="font-semibold text-blue-900 mb-4">Documentos de Recepción (Perú)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-blue-900">
@@ -211,7 +226,7 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
               <label className="text-sm font-medium">Cantidad Recibida</label>
               <input
                 type="number"
-                step="0.001"
+                step="any"
                 min="0"
                 max={item.quantity}
                 value={receivedQuantities[item.id]}
@@ -254,5 +269,6 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
         </Button>
       </div>
     </form>
+    </>
   )
 }

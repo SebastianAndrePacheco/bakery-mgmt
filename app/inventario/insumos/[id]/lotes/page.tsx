@@ -5,6 +5,7 @@ import { ArrowLeft, Package } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BatchesTable } from '@/components/tables/batches-table'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function SupplyBatchesPage({ 
   params 
@@ -47,6 +48,12 @@ export default async function SupplyBatchesPage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Inventario', href: '/inventario' },
+        { label: 'Insumos', href: '/inventario/insumos' },
+        { label: supply.name, href: `/inventario/insumos/${id}` },
+        { label: 'Lotes' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/inventario/insumos">
           <Button variant="ghost" size="icon">

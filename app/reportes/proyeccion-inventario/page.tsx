@@ -5,6 +5,7 @@ import { ArrowLeft, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency } from '@/utils/helpers/currency'
 import { formatDate } from '@/utils/helpers/dates'
+import { ExportButton } from '@/components/ui/export-button'
 
 type Urgency = 'critico' | 'pronto' | 'ok'
 
@@ -163,7 +164,7 @@ export default async function ProyeccionInventarioPage() {
       supplyId: supply.id,
       code: supply.code || '',
       name: supply.name || '',
-      unitSymbol: (supply.unit as any)?.symbol || '',
+      unitSymbol: (supply.unit as unknown as { symbol: string } | null)?.symbol || '',
       currentStock,
       avgDailyConsumption,
       daysRemaining,
@@ -186,6 +187,18 @@ export default async function ProyeccionInventarioPage() {
   const okCount = projections.filter(p => p.urgency === 'ok').length
   const urgentItems = projections.filter(p => p.urgency === 'critico' || p.urgency === 'pronto')
 
+  const exportData = projections.map(p => ({
+    codigo: p.code,
+    insumo: p.name,
+    stock_actual: p.currentStock.toFixed(2),
+    unidad: p.unitSymbol,
+    consumo_diario_prom: p.avgDailyConsumption.toFixed(3),
+    dias_restantes: isFinite(p.daysRemaining) ? Math.floor(p.daysRemaining) : 'Sin datos',
+    fecha_agotamiento: p.stockoutDate ? p.stockoutDate.toISOString().split('T')[0] : 'Sin datos',
+    cantidad_sugerida: p.suggestedOrderQty.toFixed(2),
+    urgencia: p.urgency,
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -194,12 +207,27 @@ export default async function ProyeccionInventarioPage() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold">Proyección de Inventario</h1>
           <p className="text-muted-foreground">
             Estimación de agotamiento y sugerencias de compra por insumo
           </p>
         </div>
+        <ExportButton
+          filename="proyeccion_inventario"
+          columns={[
+            { label: 'Código', key: 'codigo' },
+            { label: 'Insumo', key: 'insumo' },
+            { label: 'Stock Actual', key: 'stock_actual' },
+            { label: 'Unidad', key: 'unidad' },
+            { label: 'Consumo Diario Prom.', key: 'consumo_diario_prom' },
+            { label: 'Días Restantes', key: 'dias_restantes' },
+            { label: 'Fecha Agotamiento', key: 'fecha_agotamiento' },
+            { label: 'Cant. Sugerida', key: 'cantidad_sugerida' },
+            { label: 'Urgencia', key: 'urgencia' },
+          ]}
+          data={exportData}
+        />
       </div>
 
       {/* Summary cards */}

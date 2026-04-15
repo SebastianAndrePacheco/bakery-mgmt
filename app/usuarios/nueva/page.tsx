@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ArrowLeft } from 'lucide-react'
 import { UserCreateForm } from '@/components/forms/user-create-form'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function NuevoUsuarioPage() {
   const supabase = await createClient()
@@ -22,6 +23,10 @@ export default async function NuevoUsuarioPage() {
 
   return (
     <div className="space-y-6 max-w-xl">
+      <Breadcrumb items={[
+        { label: 'Usuarios', href: '/usuarios' },
+        { label: 'Nuevo Usuario' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/usuarios">
           <Button variant="ghost" size="icon">

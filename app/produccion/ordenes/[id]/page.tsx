@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/utils/helpers/dates'
 import { RegisterProductionForm } from '@/components/forms/register-production-form'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function ProductionOrderDetailPage({ 
   params 
@@ -88,6 +89,11 @@ export default async function ProductionOrderDetailPage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Producción', href: '/produccion' },
+        { label: 'Órdenes', href: '/produccion/ordenes' },
+        { label: order.order_number },
+      ]} />
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/produccion/ordenes">

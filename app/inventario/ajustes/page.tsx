@@ -1,22 +1,52 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { AdjustmentsTable } from '@/components/tables/adjustments-table'
+import { Suspense } from 'react'
+import { SearchInput } from '@/components/ui/search-input'
+import { FilterSelect } from '@/components/ui/filter-select'
 
-export default async function AdjustmentsPage() {
+const PAGE_SIZE = 30
+
+const REASONS = [
+  { value: '', label: 'Todos los motivos' },
+  { value: 'merma', label: 'Merma / Deterioro' },
+  { value: 'vencimiento', label: 'Vencimiento' },
+  { value: 'correccion', label: 'Corrección' },
+  { value: 'ajuste_inventario', label: 'Ajuste Inventario' },
+  { value: 'robo', label: 'Robo / Pérdida' },
+  { value: 'otro', label: 'Otro' },
+]
+
+export default async function AdjustmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; q?: string; razon?: string }>
+}) {
+  const { page: pageParam, q, razon } = await searchParams
+  const page = Math.max(1, parseInt(pageParam || '1'))
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
   const supabase = await createClient()
 
-  // Obtener movimientos de ajuste (merma, vencimiento, ajuste_inventario)
-  const { data: movements } = await supabase
+  let query = supabase
     .from('inventory_movements')
-    .select('*')
+    .select('*', { count: 'exact' })
     .not('movement_reason', 'in', '(compra,produccion,devolucion_proveedor,venta_manual)')
     .order('movement_date', { ascending: false })
-    .limit(50)
+    .order('created_at', { ascending: false })
+    .range(from, to)
 
-  // Obtener supplies y products
+  if (razon) query = query.eq('movement_reason', razon)
+  if (q) query = query.ilike('notes', `%${q}%`)
+
+  const { data: movements, count } = await query
+
+  // Obtener supplies y products para enriquecer
   const { data: supplies } = await supabase
     .from('supplies')
     .select('id, code, name, unit:units(symbol)')
@@ -25,27 +55,26 @@ export default async function AdjustmentsPage() {
     .from('products')
     .select('id, code, name, unit:units(symbol)')
 
-  // Crear maps
-  const suppliesMap = supplies?.reduce((acc: any, s: any) => {
-    acc[s.id] = s
-    return acc
-  }, {}) || {}
+  type EntityRef = { id: string; code: string; name: string; unit: unknown }
+  const suppliesMap: Record<string, EntityRef> = Object.fromEntries(
+    (supplies ?? []).map((s) => [s.id, s as unknown as EntityRef])
+  )
+  const productsMap: Record<string, EntityRef> = Object.fromEntries(
+    (products ?? []).map((p) => [p.id, p as unknown as EntityRef])
+  )
 
-  const productsMap = products?.reduce((acc: any, p: any) => {
-    acc[p.id] = p
-    return acc
-  }, {}) || {}
-
-  // Combinar manualmente
   const adjustments = movements?.map(m => ({
     ...m,
     supply: m.entity_type === 'insumo' ? suppliesMap[m.entity_id] : undefined,
     product: m.entity_type === 'producto' ? productsMap[m.entity_id] : undefined,
   })) || []
 
-  const totalAdjustments = adjustments.length
+  const totalAdjustments = count || 0
   const positiveAdjustments = adjustments.filter(a => a.movement_type === 'entrada').length
   const negativeAdjustments = adjustments.filter(a => a.movement_type === 'salida').length
+  const totalPages = Math.ceil(totalAdjustments / PAGE_SIZE)
+
+  const selectedRazonLabel = REASONS.find(r => r.value === (razon || ''))?.label || 'Todos'
 
   return (
     <div className="space-y-6">
@@ -64,30 +93,24 @@ export default async function AdjustmentsPage() {
         </Link>
       </div>
 
-      {/* Métricas */}
+      {/* Métricas de la página actual */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Total Ajustes</CardDescription>
-            <CardTitle className="text-3xl text-slate-700">
-              {totalAdjustments}
-            </CardTitle>
+            <CardDescription>Total Registros</CardDescription>
+            <CardTitle className="text-3xl text-slate-700">{totalAdjustments}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Ajustes Positivos</CardDescription>
-            <CardTitle className="text-3xl text-green-600">
-              +{positiveAdjustments}
-            </CardTitle>
+            <CardDescription>Positivos (página)</CardDescription>
+            <CardTitle className="text-3xl text-green-600">+{positiveAdjustments}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Ajustes Negativos</CardDescription>
-            <CardTitle className="text-3xl text-red-600">
-              -{negativeAdjustments}
-            </CardTitle>
+            <CardDescription>Negativos (página)</CardDescription>
+            <CardTitle className="text-3xl text-red-600">-{negativeAdjustments}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -95,16 +118,35 @@ export default async function AdjustmentsPage() {
       {/* Lista de ajustes */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            Historial de Ajustes
-          </CardTitle>
-          <CardDescription>
-            Últimos {totalAdjustments} ajustes registrados
-          </CardDescription>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Historial de Ajustes
+              </CardTitle>
+              <CardDescription>
+                {totalAdjustments} registros{razon ? ` — ${selectedRazonLabel}` : ''}{q ? ` — notas: "${q}"` : ''}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Suspense>
+                <FilterSelect
+                  paramName="razon"
+                  options={REASONS.slice(1).map(r => ({ value: r.value, label: r.label }))}
+                  placeholder="Todos los motivos"
+                />
+              </Suspense>
+              <div className="w-52">
+                <Suspense>
+                  <SearchInput placeholder="Buscar en observaciones..." paramName="q" />
+                </Suspense>
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <AdjustmentsTable adjustments={adjustments} />
+          <Pagination page={page} totalPages={totalPages} basePath="/inventario/ajustes" />
         </CardContent>
       </Card>
     </div>

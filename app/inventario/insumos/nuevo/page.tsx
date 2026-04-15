@@ -4,6 +4,7 @@ import { SupplyForm } from '@/components/forms/supply-form'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 
 export default async function NewSupplyPage() {
   const supabase = await createClient()
@@ -23,6 +24,11 @@ export default async function NewSupplyPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[
+        { label: 'Inventario', href: '/inventario' },
+        { label: 'Insumos', href: '/inventario/insumos' },
+        { label: 'Nuevo Insumo' },
+      ]} />
       <div className="flex items-center gap-4">
         <Link href="/inventario/insumos">
           <Button variant="ghost" size="icon">

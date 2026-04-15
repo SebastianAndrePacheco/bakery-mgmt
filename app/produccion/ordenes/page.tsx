@@ -2,25 +2,27 @@ import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/pagination'
+import { SearchInput } from '@/components/ui/search-input'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { ProductionOrdersTable } from '@/components/tables/production-orders-table'
+import { Suspense } from 'react'
 
 const PAGE_SIZE = 20
 
 export default async function ProductionOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; q?: string }>
 }) {
-  const { page: pageParam } = await searchParams
+  const { page: pageParam, q } = await searchParams
   const page = Math.max(1, parseInt(pageParam || '1'))
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
 
   const supabase = await createClient()
 
-  const { data: orders, count, error } = await supabase
+  let query = supabase
     .from('production_orders')
     .select(`
       *,
@@ -28,6 +30,10 @@ export default async function ProductionOrdersPage({
     `, { count: 'exact' })
     .order('production_date', { ascending: false })
     .range(from, to)
+
+  if (q) query = query.or(`order_number.ilike.%${q}%,notes.ilike.%${q}%`)
+
+  const { data: orders, count, error } = await query
 
   if (error) {
     console.error('Error fetching production orders:', error)
@@ -81,10 +87,17 @@ export default async function ProductionOrdersPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Órdenes</CardTitle>
-          <CardDescription>
-            {count || 0} órdenes registradas
-          </CardDescription>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle>Lista de Órdenes</CardTitle>
+              <CardDescription>{count || 0} órdenes{q ? ` para "${q}"` : ' registradas'}</CardDescription>
+            </div>
+            <div className="w-64">
+              <Suspense>
+                <SearchInput placeholder="N° orden o notas..." />
+              </Suspense>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <ProductionOrdersTable orders={orders || []} />

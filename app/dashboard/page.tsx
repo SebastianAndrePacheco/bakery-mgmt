@@ -3,10 +3,13 @@ import { Package, ShoppingCart, AlertTriangle, TrendingUp, Clock } from 'lucide-
 import { createClient } from '@/utils/supabase/server'
 import { formatCurrency } from '@/utils/helpers/currency'
 import Link from 'next/link'
+import { PurchasesProductionChart } from '@/components/charts/purchases-production-chart'
+import { InventoryDonutChart } from '@/components/charts/inventory-donut-chart'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
   const today = new Date().toISOString().split('T')[0]
+  const eightWeeksAgo = new Date(Date.now() - 56 * 86400000).toISOString().split('T')[0]
 
   // Queries paralelas — sin N+1
   const [
@@ -16,8 +19,10 @@ export default async function DashboardPage() {
     { count: receivedToday },
     { count: movementsToday },
     { count: productionsToday },
-    // Valor inventario: suma agregada en BD en lugar de traer todas las filas
     { data: inventoryAgg },
+    { data: recentPurchases },
+    { data: recentProductions },
+    { data: categoryBatches },
   ] = await Promise.all([
     supabase.from('supplies').select('*', { count: 'exact', head: true }).eq('is_active', true),
 
@@ -44,9 +49,25 @@ export default async function DashboardPage() {
       .eq('status', 'completada')
       .eq('production_date', today),
 
-    // Una sola query con los supply_ids de la página para calcular valor
     supabase.from('supply_batches')
       .select('current_quantity, unit_price')
+      .eq('status', 'disponible')
+      .gt('current_quantity', 0),
+
+    // Para gráfica: compras por semana (últimas 8 semanas)
+    supabase.from('purchase_orders')
+      .select('order_date, total')
+      .gte('order_date', eightWeeksAgo)
+      .in('status', ['recibido_completo', 'recibido_parcial', 'pendiente', 'enviado']),
+
+    // Para gráfica: costo de producción por semana
+    supabase.from('production_batches')
+      .select('production_date, total_cost')
+      .gte('production_date', eightWeeksAgo),
+
+    // Para donut: valor de inventario por categoría
+    supabase.from('supply_batches')
+      .select('current_quantity, unit_price, supply:supplies(category:categories(name))')
       .eq('status', 'disponible')
       .gt('current_quantity', 0),
   ])
@@ -83,6 +104,46 @@ export default async function DashboardPage() {
   const inventoryValue = (inventoryAgg || []).reduce(
     (sum, b) => sum + (b.current_quantity * b.unit_price), 0
   )
+
+  // ── Chart data: purchases vs production cost per week ──────────────────────
+  const getWeekKey = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00')
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    return monday.toISOString().split('T')[0]
+  }
+  const weekMap = new Map<string, { compras: number; produccion: number }>()
+  for (const po of recentPurchases || []) {
+    const k = getWeekKey(po.order_date)
+    const e = weekMap.get(k) ?? { compras: 0, produccion: 0 }
+    e.compras += po.total || 0
+    weekMap.set(k, e)
+  }
+  for (const pb of recentProductions || []) {
+    const k = getWeekKey(pb.production_date)
+    const e = weekMap.get(k) ?? { compras: 0, produccion: 0 }
+    e.produccion += pb.total_cost || 0
+    weekMap.set(k, e)
+  }
+  const chartData = [...weekMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([week, v]) => ({
+      week: new Date(week + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
+      compras: Math.round(v.compras * 100) / 100,
+      produccion: Math.round(v.produccion * 100) / 100,
+    }))
+
+  // ── Donut: inventory value by category ─────────────────────────────────────
+  const categoryMap = new Map<string, number>()
+  for (const b of categoryBatches || []) {
+    const cat = (b.supply as unknown as { category?: { name: string } | null })?.category?.name ?? 'Sin categoría'
+    categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + (b.current_quantity * b.unit_price))
+  }
+  const donutData = [...categoryMap.entries()]
+    .filter(([, v]) => v > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 7)
+    .map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
 
   return (
     <div className="space-y-6">
@@ -259,6 +320,29 @@ export default async function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Gráficas */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Compras vs Costo de Producción</CardTitle>
+            <CardDescription>Últimas 8 semanas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PurchasesProductionChart data={chartData} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Inventario por Categoría</CardTitle>
+            <CardDescription>Valor actual de insumos en stock</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <InventoryDonutChart data={donutData} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

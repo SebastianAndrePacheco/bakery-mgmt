@@ -2,18 +2,28 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Settings, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { recordAdjustment } from '@/app/actions'
+
+interface AdjustmentEntity {
+  id: string
+  code: string
+  name: string
+  unit_id: string
+  unit?: { symbol: string } | null
+}
 
 interface AdjustmentFormProps {
-  supplies: any[]
-  products: any[]
+  supplies: AdjustmentEntity[]
+  products: AdjustmentEntity[]
 }
 
 export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
   const router = useRouter()
-  const supabase = createClient()
+  const { confirm, dialog } = useConfirm()
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -35,69 +45,64 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
     e.preventDefault()
 
     if (!formData.entity_id) {
-      alert('Por favor selecciona un ' + (formData.entity_type === 'insumo' ? 'insumo' : 'producto'))
+      toast.error('Selecciona un ' + (formData.entity_type === 'insumo' ? 'insumo' : 'producto'))
       return
     }
 
     const quantity = parseFloat(formData.quantity)
     if (!quantity || quantity <= 0) {
-      alert('La cantidad debe ser mayor a cero')
+      toast.error('La cantidad debe ser mayor a cero')
+      return
+    }
+
+    if (!selectedEntity?.unit_id) {
+      toast.error('No se pudo obtener la unidad del elemento seleccionado')
       return
     }
 
     const unitPrice = formData.adjustment_type === 'entrada' ? parseFloat(formData.unit_price) || 0 : 0
+    const sign = formData.adjustment_type === 'entrada' ? 'POSITIVO (+)' : 'NEGATIVO (-)'
 
-    const confirm = window.confirm(
-      `⚠️ ¿Confirmar ajuste de inventario?\n\n` +
-      `Tipo: ${formData.adjustment_type === 'entrada' ? 'POSITIVO (+)' : 'NEGATIVO (-)'}\n` +
-      `${formData.entity_type === 'insumo' ? 'Insumo' : 'Producto'}: ${selectedEntity?.name}\n` +
-      `Cantidad: ${quantity} ${selectedEntity?.unit?.symbol}\n` +
-      (formData.adjustment_type === 'entrada' && unitPrice > 0 ? `Costo unitario: S/ ${unitPrice.toFixed(4)}\n` : '') +
-      `Motivo: ${formData.reason}\n\n` +
-      `Este movimiento se registrará en el kardex.`
-    )
-
-    if (!confirm) return
+    const ok = await confirm({
+      title: 'Confirmar ajuste de inventario',
+      description: `${sign} — ${selectedEntity?.name}: ${quantity} ${selectedEntity?.unit?.symbol}. Motivo: ${formData.reason}. Este movimiento se registrará en el kardex.`,
+      confirmLabel: 'Registrar ajuste',
+      variant: formData.adjustment_type === 'salida' ? 'danger' : 'default',
+    })
+    if (!ok) return
 
     setLoading(true)
 
     try {
-      if (!selectedEntity?.unit_id) {
-        throw new Error('No se pudo obtener la unidad del elemento seleccionado')
-      }
-
-      const { error } = await supabase.rpc('record_inventory_adjustment', {
-        p_entity_type:     formData.entity_type,
-        p_entity_id:       formData.entity_id,
-        p_adjustment_type: formData.adjustment_type,
-        p_quantity:        quantity,
-        p_reason:          formData.reason,
-        p_notes:           formData.notes,
-        p_movement_date:   formData.movement_date,
-        p_unit_id:         selectedEntity.unit_id,
-        p_unit_price:      unitPrice,
+      const result = await recordAdjustment({
+        entity_type:     formData.entity_type,
+        entity_id:       formData.entity_id,
+        adjustment_type: formData.adjustment_type,
+        quantity,
+        reason:          formData.reason,
+        notes:           formData.notes,
+        movement_date:   formData.movement_date,
+        unit_id:         selectedEntity.unit_id,
+        unit_price:      unitPrice,
       })
 
-      if (error) throw error
+      if ('error' in result) {
+        toast.error('Error al registrar ajuste: ' + result.error)
+        return
+      }
 
-      alert(
-        `✅ Ajuste registrado exitosamente!\n\n` +
-        `Tipo: ${formData.adjustment_type === 'entrada' ? 'Positivo' : 'Negativo'}\n` +
-        `Cantidad: ${formData.adjustment_type === 'entrada' ? '+' : '-'}${quantity} ${selectedEntity?.unit?.symbol}`
-      )
-
+      const sign2 = formData.adjustment_type === 'entrada' ? '+' : '-'
+      toast.success(`Ajuste registrado — ${sign2}${quantity} ${selectedEntity?.unit?.symbol} de ${selectedEntity?.name}`)
       router.push('/inventario/ajustes')
-
-    } catch (error: any) {
-      console.error('Error al registrar ajuste:', error)
-      alert('❌ Error al registrar ajuste: ' + error.message)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <>
+      {dialog}
+      <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <label className="text-sm font-medium">
@@ -164,7 +169,7 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
             <input
               type="number"
               required
-              step="0.001"
+              step="any"
               min="0.001"
               value={formData.quantity}
               onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
@@ -214,7 +219,7 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
             </label>
             <input
               type="number"
-              step="0.0001"
+              step="any"
               min="0"
               value={formData.unit_price}
               onChange={(e) => setFormData({ ...formData, unit_price: e.target.value })}
@@ -295,5 +300,6 @@ export function AdjustmentForm({ supplies, products }: AdjustmentFormProps) {
         </Button>
       </div>
     </form>
+    </>
   )
 }
