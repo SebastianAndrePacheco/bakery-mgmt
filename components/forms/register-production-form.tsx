@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Factory, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { completeProductionOrder } from '@/app/actions'
+import { localDateString } from '@/utils/helpers/currency'
 
 interface ProductionOrderInput {
   id: string
@@ -30,7 +31,7 @@ export function RegisterProductionForm({ order, canProduce }: RegisterProduction
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
-    production_date: new Date().toISOString().split('T')[0],
+    production_date: localDateString(),
     quantity_produced: order.quantity_planned.toString(),
     notes: '',
   })
@@ -110,7 +111,7 @@ export function RegisterProductionForm({ order, canProduce }: RegisterProduction
             required
             value={formData.production_date}
             onChange={(e) => setFormData({ ...formData, production_date: e.target.value })}
-            max={new Date().toISOString().split('T')[0]}
+            max={localDateString()}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>

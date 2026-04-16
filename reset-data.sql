@@ -14,28 +14,27 @@ BEGIN;
 SET LOCAL session_replication_role = replica;
 
 -- Desconectar FK de user_profiles → empleados antes de borrar empleados
+-- (evita que TRUNCATE empleados cascade a user_profiles)
 UPDATE user_profiles SET empleado_id = NULL WHERE empleado_id IS NOT NULL;
 
--- Tablas operativas — orden aproximado de hoja a raíz (con replica-role
--- no es estrictamente necesario pero queda documentado)
-TRUNCATE TABLE
-  audit_logs,
-  inventory_movements,
-  production_batches,
-  production_order_items,
-  production_orders,
-  purchase_order_items,
-  purchase_orders,
-  supply_batches,
-  supplies,
-  products,
-  categories,
-  units,
-  suppliers,
-  empleados,
-  personas,
-  cargos
-RESTART IDENTITY CASCADE;
+-- Tablas operativas sin CASCADE para no arrastrar user_profiles
+-- El orden importa: primero hojas, luego raíces
+TRUNCATE TABLE audit_logs                RESTART IDENTITY;
+TRUNCATE TABLE inventory_movements       RESTART IDENTITY;
+TRUNCATE TABLE production_batches        RESTART IDENTITY;
+TRUNCATE TABLE production_order_items    RESTART IDENTITY;
+TRUNCATE TABLE production_orders         RESTART IDENTITY;
+TRUNCATE TABLE purchase_order_items      RESTART IDENTITY;
+TRUNCATE TABLE purchase_orders           RESTART IDENTITY;
+TRUNCATE TABLE supply_batches            RESTART IDENTITY;
+TRUNCATE TABLE supplies                  RESTART IDENTITY;
+TRUNCATE TABLE products                  RESTART IDENTITY;
+TRUNCATE TABLE categories                RESTART IDENTITY;
+TRUNCATE TABLE units                     RESTART IDENTITY;
+TRUNCATE TABLE suppliers                 RESTART IDENTITY;
+TRUNCATE TABLE empleados                 RESTART IDENTITY;
+TRUNCATE TABLE personas                  RESTART IDENTITY;
+TRUNCATE TABLE cargos                    RESTART IDENTITY;
 
 -- Empresa config: vuelve al estado inicial
 TRUNCATE TABLE empresa_config RESTART IDENTITY CASCADE;

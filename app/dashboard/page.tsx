@@ -284,7 +284,7 @@ export default async function DashboardPage() {
                         {order.expected_delivery_date && (
                           <div className="text-xs text-slate-500 mt-1 flex items-center gap-1 justify-end">
                             <Clock className="w-3 h-3" />
-                            {new Date(order.expected_delivery_date).toLocaleDateString('es-PE')}
+                            {new Date(order.expected_delivery_date + 'T00:00:00').toLocaleDateString('es-PE')}
                           </div>
                         )}
                       </div>

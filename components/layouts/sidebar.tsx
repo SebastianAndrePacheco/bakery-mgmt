@@ -23,20 +23,17 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 
-type Role = 'admin' | 'panadero' | 'cajero'
-
 interface ChildItem {
   title: string
   icon: React.ElementType
   href: string
-  roles: Role[]
 }
 
 interface MenuItem {
   title: string
   icon: React.ElementType
   href?: string
-  roles: Role[]
+  modulo: string
   children?: ChildItem[]
 }
 
@@ -45,77 +42,78 @@ const menuItems: MenuItem[] = [
     title: 'Dashboard',
     icon: LayoutDashboard,
     href: '/dashboard',
-    roles: ['admin', 'panadero', 'cajero'],
+    modulo: 'dashboard',
   },
   {
     title: 'Compras',
     icon: ShoppingCart,
-    roles: ['admin', 'panadero'],
+    modulo: 'compras',
     children: [
-      { title: 'Proveedores',       icon: Users,          href: '/compras/proveedores', roles: ['admin'] },
-      { title: 'Órdenes de Compra', icon: ClipboardList,  href: '/compras/ordenes',     roles: ['admin', 'panadero'] },
+      { title: 'Proveedores',       icon: Users,         href: '/compras/proveedores' },
+      { title: 'Órdenes de Compra', icon: ClipboardList, href: '/compras/ordenes'     },
     ],
   },
   {
     title: 'Inventario',
     icon: Package,
-    roles: ['admin', 'panadero', 'cajero'],
+    modulo: 'inventario',
     children: [
-      { title: 'Insumos',              icon: Box,        href: '/inventario/insumos',              roles: ['admin', 'panadero'] },
-      { title: 'Productos Terminados', icon: ShoppingBag, href: '/inventario/productos-terminados', roles: ['admin', 'panadero', 'cajero'] },
-      { title: 'Kardex',               icon: History,    href: '/inventario/kardex',               roles: ['admin', 'panadero'] },
-      { title: 'Ajustes',              icon: Settings,   href: '/inventario/ajustes',              roles: ['admin', 'panadero'] },
+      { title: 'Insumos',              icon: Box,        href: '/inventario/insumos'              },
+      { title: 'Productos Terminados', icon: ShoppingBag, href: '/inventario/productos-terminados' },
+      { title: 'Kardex',               icon: History,    href: '/inventario/kardex'               },
+      { title: 'Ajustes',              icon: Settings,   href: '/inventario/ajustes'              },
     ],
   },
   {
     title: 'Producción',
     icon: Factory,
-    roles: ['admin', 'panadero'],
+    modulo: 'produccion',
     children: [
-      { title: 'Productos', icon: ShoppingBag, href: '/produccion/productos', roles: ['admin'] },
-      { title: 'Órdenes',   icon: ChefHat,     href: '/produccion/ordenes',   roles: ['admin', 'panadero'] },
+      { title: 'Productos', icon: ShoppingBag, href: '/produccion/productos' },
+      { title: 'Órdenes',   icon: ChefHat,     href: '/produccion/ordenes'   },
     ],
   },
   {
     title: 'Reportes',
     icon: FileText,
     href: '/reportes',
-    roles: ['admin', 'panadero', 'cajero'],
+    modulo: 'reportes',
   },
   {
     title: 'Empleados',
     icon: UserCheck,
-    roles: ['admin'],
+    modulo: 'empleados',
     children: [
-      { title: 'Listado',  icon: Users,     href: '/empleados',        roles: ['admin'] },
-      { title: 'Cargos',   icon: Briefcase, href: '/empleados/cargos', roles: ['admin'] },
+      { title: 'Listado', icon: Users,     href: '/empleados'        },
+      { title: 'Cargos',  icon: Briefcase, href: '/empleados/cargos' },
     ],
   },
   {
     title: 'Usuarios',
     icon: Users,
     href: '/usuarios',
-    roles: ['admin'],
+    modulo: 'usuarios',
   },
   {
     title: 'Configuración',
     icon: Building2,
     href: '/configuracion',
-    roles: ['admin'],
+    modulo: 'configuracion',
   },
   {
     title: 'Auditoría',
     icon: ShieldCheck,
     href: '/auditoria',
-    roles: ['admin'],
+    modulo: 'auditoria',
   },
 ]
 
 interface SidebarProps {
-  role: Role
+  modulos: string[]
+  displayName?: string
 }
 
-export function Sidebar({ role }: SidebarProps) {
+export function Sidebar({ modulos, displayName }: SidebarProps) {
   const pathname = usePathname()
   const [openSections, setOpenSections] = useState<string[]>(['Compras', 'Inventario', 'Producción'])
 
@@ -127,7 +125,7 @@ export function Sidebar({ role }: SidebarProps) {
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
-  const visibleItems = menuItems.filter(item => item.roles.includes(role))
+  const visibleItems = menuItems.filter(item => modulos.includes(item.modulo))
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-100 min-h-screen p-4">
@@ -139,11 +137,8 @@ export function Sidebar({ role }: SidebarProps) {
       <nav className="space-y-1">
         {visibleItems.map((item) => {
           if (item.children) {
-            const visibleChildren = item.children.filter(c => c.roles.includes(role))
-            if (visibleChildren.length === 0) return null
-
             const isOpen = openSections.includes(item.title)
-            const hasActiveChild = visibleChildren.some(child => isActive(child.href))
+            const hasActiveChild = item.children.some(child => isActive(child.href))
 
             return (
               <div key={item.title}>
@@ -166,7 +161,7 @@ export function Sidebar({ role }: SidebarProps) {
 
                 {isOpen && (
                   <div className="mt-1 ml-4 space-y-1">
-                    {visibleChildren.map((child) => (
+                    {item.children.map((child) => (
                       <Link
                         key={child.href}
                         href={child.href}
@@ -204,7 +199,9 @@ export function Sidebar({ role }: SidebarProps) {
       </nav>
 
       <div className="mt-auto pt-8">
-        <p className="text-xs text-slate-500 px-3 capitalize">{role}</p>
+        {displayName && (
+          <p className="text-xs text-slate-400 px-3 truncate">{displayName}</p>
+        )}
       </div>
     </aside>
   )

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Supplier, Supply, Unit } from '@/utils/types/database.types'
 import { Plus, Trash2 } from 'lucide-react'
-import { calculateSubtotalFromTotal, formatCurrency, multiplyQtyPrice, round2 } from '@/utils/helpers/currency'
+import { calculateSubtotalFromTotal, formatCurrency, localDateString, multiplyQtyPrice, round2 } from '@/utils/helpers/currency'
 import { createPurchaseOrder } from '@/app/actions'
 import { toast } from 'sonner'
 
@@ -30,7 +30,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     supplier_id: '',
-    order_date: new Date().toISOString().split('T')[0],
+    order_date: localDateString(),
     expected_delivery_date: '',
     notes: '',
   })

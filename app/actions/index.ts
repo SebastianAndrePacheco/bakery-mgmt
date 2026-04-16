@@ -964,3 +964,32 @@ export async function upsertEmpresaConfig(data: unknown): Promise<ActionResult> 
   revalidatePath('/configuracion')
   return { success: true }
 }
+
+// ─── Cargo Permisos ──────────────────────────────────────────────────────────
+
+export async function setCargoPermisos(
+  cargoId: string,
+  modulos: string[]
+): Promise<ActionResult> {
+  const supabase = await createClient()
+
+  // Borrar todos los permisos actuales del cargo
+  const { error: delError } = await supabase
+    .from('cargo_permisos')
+    .delete()
+    .eq('cargo_id', cargoId)
+
+  if (delError) return { error: delError.message }
+
+  // Insertar los nuevos (si hay alguno)
+  if (modulos.length > 0) {
+    const { error: insError } = await supabase
+      .from('cargo_permisos')
+      .insert(modulos.map(modulo => ({ cargo_id: cargoId, modulo })))
+
+    if (insError) return { error: insError.message }
+  }
+
+  revalidatePath('/configuracion/permisos')
+  return { success: true }
+}

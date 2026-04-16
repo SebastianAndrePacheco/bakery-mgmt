@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Product, Unit } from '@/utils/types/database.types'
 import { Factory, AlertCircle } from 'lucide-react'
 import { createProductionOrder } from '@/app/actions'
+import { localDateString } from '@/utils/helpers/currency'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { toast } from 'sonner'
 
@@ -30,8 +31,8 @@ export function ProductionOrderForm({ products }: ProductionOrderFormProps) {
 
   const [formData, setFormData] = useState({
     product_id: '',
-    scheduled_date: new Date().toISOString().split('T')[0],
-    production_date: new Date().toISOString().split('T')[0],
+    scheduled_date: localDateString(),
+    production_date: localDateString(),
     quantity_planned: '',
     order_type: 'programada',
     notes: '',

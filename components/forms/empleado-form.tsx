@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Cargo, Empleado, Persona } from '@/utils/types/database.types'
 import { createEmpleado, updateEmpleado } from '@/app/actions'
+import { localDateString } from '@/utils/helpers/currency'
 import { toast } from 'sonner'
 
 interface EmpleadoFormProps {
@@ -34,7 +35,7 @@ export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
 
   const [laboral, setLaboral] = useState({
     cargo_id:      empleado?.cargo_id      ?? '',
-    fecha_ingreso: empleado?.fecha_ingreso ?? new Date().toISOString().split('T')[0],
+    fecha_ingreso: empleado?.fecha_ingreso ?? localDateString(),
     fecha_cese:    empleado?.fecha_cese    ?? '',
     tipo_contrato: empleado?.tipo_contrato ?? 'indefinido',
     sueldo_base:   empleado?.sueldo_base?.toString() ?? '',
@@ -156,7 +157,7 @@ export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
             <label className={labelCls}>Fecha de nacimiento</label>
             <input
               type="date" value={persona.fecha_nacimiento}
-              max={new Date().toISOString().split('T')[0]}
+              max={localDateString()}
               onChange={(e) => setPersona({ ...persona, fecha_nacimiento: e.target.value })}
               className={inputCls}
             />

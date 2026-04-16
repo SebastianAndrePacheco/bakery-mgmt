@@ -44,3 +44,22 @@ export function round2(value: number): number {
 export function multiplyQtyPrice(qty: number, price: number): number {
   return Math.round(qty * price * 1_000_000) / 1_000_000
 }
+
+/**
+ * Retorna la fecha de hoy en formato YYYY-MM-DD usando la hora LOCAL
+ * (evita el desfase de un día por UTC en zonas como Peru UTC-5)
+ */
+export function localDateString(date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/**
+ * Parsea una fecha YYYY-MM-DD sin desfase de zona horaria
+ * Úsalo en lugar de new Date("2026-04-16") para display
+ */
+export function parseLocalDate(dateStr: string): Date {
+  return new Date(dateStr + 'T00:00:00')
+}
