@@ -75,14 +75,39 @@ function checkRateLimit(key: string, limit: number, windowMs: number): ActionRes
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
+const opt = z.string().max(500).optional().or(z.literal(''))
+const optEmail = z.string().email('Email inválido').max(255).optional().or(z.literal(''))
+
 const SupplierSchema = z.object({
-  business_name: z.string().min(1, 'Razón social requerida').max(200).trim(),
-  ruc: z.string().regex(/^\d{11}$/, 'RUC debe tener 11 dígitos numéricos').optional().or(z.literal('')),
-  contact_name: z.string().min(1, 'Nombre de contacto requerido').max(100).trim(),
-  phone: z.string().min(7, 'Teléfono inválido (mínimo 7 dígitos)').max(20).trim(),
-  email: z.string().email('Email inválido').max(255).optional().or(z.literal('')),
-  address: z.string().max(500).optional().or(z.literal('')),
-  is_active: z.boolean().default(true),
+  // Empresa
+  business_name:    z.string().min(1, 'Razón social requerida').max(200).trim(),
+  ruc:              z.string().regex(/^\d{11}$/, 'RUC debe tener 11 dígitos numéricos').optional().or(z.literal('')),
+  nombre_comercial: opt,
+  tipo_proveedor:   opt,
+  estado_sunat:     opt,
+  condicion_sunat:  opt,
+  direccion_fiscal: opt,
+  telefono_empresa: z.string().max(20).optional().or(z.literal('')),
+  email_empresa:    optEmail,
+  web:              opt,
+  // Contacto
+  contact_name:     z.string().min(1, 'Nombre del contacto requerido').max(100).trim(),
+  contact_cargo:    z.string().max(100).optional().or(z.literal('')),
+  contact_dni:      z.string().max(20).optional().or(z.literal('')),
+  contact_phone:    z.string().max(20).optional().or(z.literal('')),
+  contact_email:    optEmail,
+  contact_whatsapp: z.string().max(20).optional().or(z.literal('')),
+  // Campos legacy (se mantienen por compatibilidad con columnas NOT NULL en DB)
+  phone:            z.string().max(20).optional().or(z.literal('')),
+  email:            optEmail,
+  address:          opt,
+  // Pago
+  banco:            z.string().max(100).optional().or(z.literal('')),
+  tipo_cuenta:      z.enum(['ahorros', 'corriente']).optional(),
+  numero_cuenta:    z.string().max(30).optional().or(z.literal('')),
+  cci:              z.string().max(20).optional().or(z.literal('')),
+  moneda:           z.string().max(10).optional().or(z.literal('')),
+  is_active:        z.boolean().default(true),
 })
 
 const SupplySchema = z.object({
@@ -193,6 +218,35 @@ export type ProductionResult = {
 
 // ─── Supplier Actions ─────────────────────────────────────────────────────────
 
+function buildSupplierPayload(d: z.infer<typeof SupplierSchema>) {
+  return {
+    ...d,
+    ruc:              d.ruc              || null,
+    email:            d.email            || d.contact_email  || null,
+    address:          d.address          || d.direccion_fiscal || null,
+    // phone es NOT NULL en DB — sincronizar desde contact_phone o telefono_empresa
+    phone:            d.contact_phone    || d.telefono_empresa || d.phone || '',
+    nombre_comercial: d.nombre_comercial || null,
+    tipo_proveedor:   d.tipo_proveedor   || null,
+    estado_sunat:     d.estado_sunat     || null,
+    condicion_sunat:  d.condicion_sunat  || null,
+    direccion_fiscal: d.direccion_fiscal || null,
+    telefono_empresa: d.telefono_empresa || null,
+    email_empresa:    d.email_empresa    || null,
+    web:              d.web              || null,
+    contact_cargo:    d.contact_cargo    || null,
+    contact_dni:      d.contact_dni      || null,
+    contact_phone:    d.contact_phone    || null,
+    contact_email:    d.contact_email    || null,
+    contact_whatsapp: d.contact_whatsapp || null,
+    banco:            d.banco            || null,
+    tipo_cuenta:      d.tipo_cuenta      ?? null,
+    numero_cuenta:    d.numero_cuenta    || null,
+    cci:              d.cci              || null,
+    moneda:           d.moneda           || 'PEN',
+  }
+}
+
 export async function createSupplier(data: unknown): Promise<ActionResult> {
   const parsed = SupplierSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
@@ -201,14 +255,7 @@ export async function createSupplier(data: unknown): Promise<ActionResult> {
   if (!user) return { error: 'No autorizado' }
   if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
-  const { ruc, email, address, ...rest } = parsed.data
-  const { error } = await supabase.from('suppliers').insert([{
-    ...rest,
-    ruc: ruc || null,
-    email: email || null,
-    address: address || null,
-  }])
-
+  const { error } = await supabase.from('suppliers').insert([buildSupplierPayload(parsed.data)])
   if (error) return dbError(error, 'createSupplier')
   revalidatePath('/compras/proveedores')
   return { success: true }
@@ -224,16 +271,10 @@ export async function updateSupplier(id: string, data: unknown): Promise<ActionR
   if (!user) return { error: 'No autorizado' }
   if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
-  const { ruc, email, address, ...rest } = parsed.data
-  const { error } = await supabase.from('suppliers').update({
-    ...rest,
-    ruc: ruc || null,
-    email: email || null,
-    address: address || null,
-  }).eq('id', id)
-
+  const { error } = await supabase.from('suppliers').update(buildSupplierPayload(parsed.data)).eq('id', id)
   if (error) return dbError(error, 'updateSupplier')
   revalidatePath('/compras/proveedores')
+  revalidatePath(`/compras/proveedores/${id}`)
   return { success: true }
 }
 
@@ -371,18 +412,20 @@ export async function deleteRecipeItem(id: string): Promise<ActionResult> {
 // ─── User Management Actions (admin only) ────────────────────────────────────
 
 const CreateUserSchema = z.object({
-  email:     z.string().email('Email inválido'),
-  password:  z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
-  full_name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100).trim(),
-  role:      z.enum(['admin', 'panadero', 'cajero']),
-  phone:     z.string().max(20).trim().optional().or(z.literal('')),
+  email:       z.string().email('Email inválido'),
+  password:    z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  full_name:   z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100).trim(),
+  role:        z.enum(['admin', 'panadero', 'cajero']),
+  phone:       z.string().max(20).trim().optional().or(z.literal('')),
+  empleado_id: z.string().uuid().optional().or(z.literal('')),
 })
 
 const UpdateUserSchema = z.object({
-  full_name: z.string().min(2).max(100).trim(),
-  role:      z.enum(['admin', 'panadero', 'cajero']),
-  phone:     z.string().max(20).trim().optional().or(z.literal('')),
-  is_active: z.boolean(),
+  full_name:   z.string().min(2).max(100).trim(),
+  role:        z.enum(['admin', 'panadero', 'cajero']),
+  phone:       z.string().max(20).trim().optional().or(z.literal('')),
+  is_active:   z.boolean(),
+  empleado_id: z.string().uuid().optional().or(z.literal('')),
 })
 
 export async function adminCreateUser(data: unknown): Promise<ActionResult> {
@@ -393,7 +436,7 @@ export async function adminCreateUser(data: unknown): Promise<ActionResult> {
   if (!user) return { error: 'No autorizado' }
   if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
-  const { email, password, full_name, role: newRole, phone } = parsed.data
+  const { email, password, full_name, role: newRole, phone, empleado_id } = parsed.data
 
   const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
@@ -411,11 +454,12 @@ export async function adminCreateUser(data: unknown): Promise<ActionResult> {
   const { error: profileError } = await supabaseAdmin
     .from('user_profiles')
     .insert({
-      id:        authUser.user.id,
+      id:          authUser.user.id,
       full_name,
-      role:      newRole,
-      phone:     phone || null,
-      is_active: true,
+      role:        newRole,
+      phone:       phone || null,
+      is_active:   true,
+      empleado_id: empleado_id || null,
     })
 
   if (profileError) {
@@ -423,7 +467,16 @@ export async function adminCreateUser(data: unknown): Promise<ActionResult> {
     return { error: 'Error al crear perfil de usuario' }
   }
 
+  // Si se vinculó un empleado, actualizar también empleados.user_id
+  if (empleado_id) {
+    await supabaseAdmin
+      .from('empleados')
+      .update({ user_id: authUser.user.id })
+      .eq('id', empleado_id)
+  }
+
   revalidatePath('/usuarios')
+  revalidatePath('/empleados')
   return { success: true }
 }
 
@@ -438,16 +491,40 @@ export async function adminUpdateUser(id: string, data: unknown): Promise<Action
   if (role !== 'admin') return { error: 'Se requiere rol administrador' }
   if (id === user.id) return { error: 'No puedes modificar tu propio perfil desde aquí' }
 
-  const { full_name, role: newRole, phone, is_active } = parsed.data
+  const { full_name, role: newRole, phone, is_active, empleado_id } = parsed.data
+
+  // Obtener empleado_id anterior para desvincularlo si cambia
+  const { data: prevProfile } = await supabaseAdmin
+    .from('user_profiles')
+    .select('empleado_id')
+    .eq('id', id)
+    .single()
 
   const { error } = await supabaseAdmin
     .from('user_profiles')
-    .update({ full_name, role: newRole, phone: phone || null, is_active })
+    .update({ full_name, role: newRole, phone: phone || null, is_active, empleado_id: empleado_id || null })
     .eq('id', id)
 
   if (error) return { error: 'Error al actualizar usuario' }
 
+  // Desvincular empleado anterior si cambió
+  if (prevProfile?.empleado_id && prevProfile.empleado_id !== empleado_id) {
+    await supabaseAdmin
+      .from('empleados')
+      .update({ user_id: null })
+      .eq('id', prevProfile.empleado_id)
+  }
+
+  // Vincular nuevo empleado
+  if (empleado_id) {
+    await supabaseAdmin
+      .from('empleados')
+      .update({ user_id: id })
+      .eq('id', empleado_id)
+  }
+
   revalidatePath('/usuarios')
+  revalidatePath('/empleados')
   return { success: true }
 }
 
@@ -674,5 +751,216 @@ export async function loginUser(email: string, password: string): Promise<Action
 
   // Éxito: limpiar contador
   _loginAttempts.delete(ip)
+  return { success: true }
+}
+
+
+// ─── CARGOS ──────────────────────────────────────────────────────────────────
+
+const CargoSchema = z.object({
+  nombre:      z.string().min(1, 'Nombre requerido').max(100).trim(),
+  descripcion: z.string().max(300).optional().or(z.literal('')),
+  is_active:   z.boolean().default(true),
+})
+
+export async function createCargo(data: unknown): Promise<ActionResult> {
+  const parsed = CargoSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('cargos').insert(parsed.data)
+  if (error) return dbError(error, 'createCargo')
+
+  revalidatePath('/empleados/cargos')
+  return { success: true }
+}
+
+export async function updateCargo(id: string, data: unknown): Promise<ActionResult> {
+  const idParsed = uuid.safeParse(id)
+  if (!idParsed.success) return { error: 'ID inválido' }
+
+  const parsed = CargoSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('cargos').update(parsed.data).eq('id', id)
+  if (error) return dbError(error, 'updateCargo')
+
+  revalidatePath('/empleados/cargos')
+  return { success: true }
+}
+
+export async function toggleCargoStatus(id: string, is_active: boolean): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('cargos').update({ is_active }).eq('id', id)
+  if (error) return dbError(error, 'toggleCargoStatus')
+
+  revalidatePath('/empleados/cargos')
+  return { success: true }
+}
+
+// ─── EMPLEADOS ───────────────────────────────────────────────────────────────
+
+const PersonaSchema = z.object({
+  tipo_doc:         z.enum(['DNI', 'CE', 'Pasaporte']),
+  numero_doc:       z.string().min(8, 'Documento inválido').max(20).trim(),
+  nombres:          z.string().min(1, 'Nombres requeridos').max(100).trim(),
+  apellido_paterno: z.string().min(1, 'Apellido paterno requerido').max(100).trim(),
+  apellido_materno: z.string().max(100).optional().or(z.literal('')),
+  fecha_nacimiento: z.string().regex(dateRegex, 'Fecha inválida').optional().or(z.literal('')),
+  genero:           z.enum(['M', 'F', 'Otro']).optional(),
+  telefono:         z.string().max(20).optional().or(z.literal('')),
+  email:            z.string().email('Email inválido').max(255).optional().or(z.literal('')),
+  direccion:        z.string().max(500).optional().or(z.literal('')),
+})
+
+const EmpleadoLaboralSchema = z.object({
+  cargo_id:       uuid,
+  fecha_ingreso:  z.string().regex(dateRegex, 'Fecha inválida'),
+  fecha_cese:     z.string().regex(dateRegex, 'Fecha inválida').optional().or(z.literal('')),
+  tipo_contrato:  z.enum(['indefinido', 'plazo_fijo', 'part_time', 'recibo_honorarios']),
+  sueldo_base:    z.number().min(0).optional().nullable(),
+  banco:          z.string().max(100).optional().or(z.literal('')),
+  tipo_cuenta:    z.enum(['ahorros', 'corriente']).optional(),
+  numero_cuenta:  z.string().max(30).optional().or(z.literal('')),
+  cci:            z.string().max(20).optional().or(z.literal('')),
+  is_active:      z.boolean().default(true),
+})
+
+const CreateEmpleadoSchema = z.object({
+  persona:  PersonaSchema,
+  laboral:  EmpleadoLaboralSchema,
+})
+
+export async function createEmpleado(data: unknown): Promise<ActionResult> {
+  const parsed = CreateEmpleadoSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const supabase = await createClient()
+
+  // 1. Crear persona
+  const { data: persona, error: personaErr } = await supabase
+    .from('personas')
+    .insert(parsed.data.persona)
+    .select('id')
+    .single()
+
+  if (personaErr) return dbError(personaErr, 'createEmpleado:persona')
+
+  // 2. Crear empleado con la persona recién creada
+  const { error: empErr } = await supabase.from('empleados').insert({
+    ...parsed.data.laboral,
+    persona_id:    persona.id,
+    fecha_cese:    parsed.data.laboral.fecha_cese || null,
+    tipo_cuenta:   parsed.data.laboral.tipo_cuenta ?? null,
+  })
+
+  if (empErr) {
+    // Compensar: borrar persona si el empleado falló
+    await supabase.from('personas').delete().eq('id', persona.id)
+    return dbError(empErr, 'createEmpleado:empleado')
+  }
+
+  revalidatePath('/empleados')
+  return { success: true }
+}
+
+export async function updateEmpleado(
+  empleadoId: string,
+  personaId: string,
+  data: unknown,
+): Promise<ActionResult> {
+  const parsed = CreateEmpleadoSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const supabase = await createClient()
+
+  const { error: personaErr } = await supabase
+    .from('personas')
+    .update(parsed.data.persona)
+    .eq('id', personaId)
+
+  if (personaErr) return dbError(personaErr, 'updateEmpleado:persona')
+
+  const { error: empErr } = await supabase
+    .from('empleados')
+    .update({
+      ...parsed.data.laboral,
+      fecha_cese:  parsed.data.laboral.fecha_cese || null,
+      tipo_cuenta: parsed.data.laboral.tipo_cuenta ?? null,
+    })
+    .eq('id', empleadoId)
+
+  if (empErr) return dbError(empErr, 'updateEmpleado:empleado')
+
+  revalidatePath('/empleados')
+  revalidatePath(`/empleados/${empleadoId}`)
+  return { success: true }
+}
+
+export async function toggleEmpleadoStatus(id: string, is_active: boolean): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('empleados').update({ is_active }).eq('id', id)
+  if (error) return dbError(error, 'toggleEmpleadoStatus')
+
+  revalidatePath('/empleados')
+  return { success: true }
+}
+
+
+// ─── EMPRESA CONFIG ──────────────────────────────────────────────────────────
+
+const EmpresaConfigSchema = z.object({
+  razon_social:     z.string().min(1, 'Razón social requerida').max(200).trim(),
+  nombre_comercial: z.string().max(200).optional().or(z.literal('')),
+  ruc:              z.string().regex(/^\d{11}$/, 'RUC debe tener 11 dígitos').optional().or(z.literal('')),
+  direccion_fiscal: z.string().max(500).optional().or(z.literal('')),
+  telefono:         z.string().max(30).optional().or(z.literal('')),
+  email:            z.string().email('Email inválido').max(255).optional().or(z.literal('')),
+  web:              z.string().max(255).optional().or(z.literal('')),
+  igv:              z.number().min(0).max(100),
+  moneda:           z.enum(['PEN', 'USD']),
+  logo_url:         z.string().max(500).optional().or(z.literal('')),
+})
+
+export async function upsertEmpresaConfig(data: unknown): Promise<ActionResult> {
+  const parsed = EmpresaConfigSchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user)          return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  // Obtener el id de la fila singleton
+  const { data: existing } = await supabase
+    .from('empresa_config')
+    .select('id')
+    .single()
+
+  const payload = {
+    ...parsed.data,
+    ruc:              parsed.data.ruc              || null,
+    nombre_comercial: parsed.data.nombre_comercial || null,
+    direccion_fiscal: parsed.data.direccion_fiscal || null,
+    telefono:         parsed.data.telefono         || null,
+    email:            parsed.data.email            || null,
+    web:              parsed.data.web              || null,
+    logo_url:         parsed.data.logo_url         || null,
+  }
+
+  if (existing) {
+    const { error } = await supabase
+      .from('empresa_config')
+      .update(payload)
+      .eq('id', existing.id)
+    if (error) return dbError(error, 'upsertEmpresaConfig:update')
+  } else {
+    const { error } = await supabase
+      .from('empresa_config')
+      .insert(payload)
+    if (error) return dbError(error, 'upsertEmpresaConfig:insert')
+  }
+
+  revalidatePath('/configuracion')
   return { success: true }
 }

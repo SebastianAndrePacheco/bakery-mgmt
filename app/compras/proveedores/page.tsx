@@ -28,7 +28,7 @@ export default async function SuppliersPage({
     .order('business_name', { ascending: true })
     .range(from, to)
 
-  if (q) query = query.or(`business_name.ilike.%${q}%,contact_name.ilike.%${q}%,ruc.ilike.%${q}%`)
+  if (q) query = query.or(`business_name.ilike.%${q}%,nombre_comercial.ilike.%${q}%,contact_name.ilike.%${q}%,ruc.ilike.%${q}%`)
 
   const { data: suppliers, count, error } = await query
 

@@ -27,5 +27,20 @@ export function calculateTotal(subtotal: number): number {
  * Calcula el subtotal a partir de un total con IGV
  */
 export function calculateSubtotalFromTotal(total: number): number {
-  return total / 1.18
+  return round2(total / 1.18)
+}
+
+/**
+ * Redondea a 2 decimales (evita artefactos de punto flotante en monedas)
+ */
+export function round2(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+/**
+ * Multiplica cantidad × precio y redondea a 6 decimales
+ * para eliminar el "tail" de punto flotante (e.g. 0.020000000000000004 → 0.02)
+ */
+export function multiplyQtyPrice(qty: number, price: number): number {
+  return Math.round(qty * price * 1_000_000) / 1_000_000
 }

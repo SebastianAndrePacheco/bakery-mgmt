@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Supplier, Supply, Unit } from '@/utils/types/database.types'
 import { Plus, Trash2 } from 'lucide-react'
-import { calculateSubtotalFromTotal, formatCurrency } from '@/utils/helpers/currency'
+import { calculateSubtotalFromTotal, formatCurrency, multiplyQtyPrice, round2 } from '@/utils/helpers/currency'
 import { createPurchaseOrder } from '@/app/actions'
 import { toast } from 'sonner'
 
@@ -54,14 +54,14 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     
     // Calcular total del item (precio unitario ya incluye IGV)
     if (field === 'quantity' || field === 'unit_price') {
-      newItems[index].total = newItems[index].quantity * newItems[index].unit_price
+      newItems[index].total = multiplyQtyPrice(newItems[index].quantity, newItems[index].unit_price)
     }
     
     setItems(newItems)
   }
 
   const calculateTotalWithIGV = () => {
-    return items.reduce((sum, item) => sum + item.total, 0)
+    return round2(items.reduce((sum, item) => sum + item.total, 0))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,7 +79,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
 
       const totalWithIGV = calculateTotalWithIGV()
       const subtotal = calculateSubtotalFromTotal(totalWithIGV)
-      const tax = totalWithIGV - subtotal
+      const tax = round2(totalWithIGV - subtotal)
 
       const result = await createPurchaseOrder({
         supplier_id:            formData.supplier_id,

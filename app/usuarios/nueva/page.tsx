@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
+import { supabaseAdmin } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,18 @@ export default async function NuevoUsuarioPage() {
     .single()
 
   if (profile?.role !== 'admin') redirect('/dashboard')
+
+  // Empleados sin acceso al sistema (user_id IS NULL)
+  const { data: empleadosSinAcceso } = await supabaseAdmin
+    .from('empleados')
+    .select(`
+      id,
+      persona:personas(nombres, apellido_paterno),
+      cargo:cargos(nombre)
+    `)
+    .is('user_id', null)
+    .eq('is_active', true)
+    .order('created_at')
 
   return (
     <div className="space-y-6 max-w-xl">
@@ -47,7 +60,7 @@ export default async function NuevoUsuarioPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <UserCreateForm />
+          <UserCreateForm empleadosSinAcceso={(empleadosSinAcceso ?? []) as unknown as Parameters<typeof UserCreateForm>[0]['empleadosSinAcceso']} />
         </CardContent>
       </Card>
     </div>

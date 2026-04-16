@@ -31,7 +31,7 @@ export default function NewSupplierPage() {
         <CardHeader>
           <CardTitle>Información del Proveedor</CardTitle>
           <CardDescription>
-            Completa los datos del proveedor
+            Completa los datos de la empresa, el contacto y los datos de pago
           </CardDescription>
         </CardHeader>
         <CardContent>

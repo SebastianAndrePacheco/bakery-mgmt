@@ -54,7 +54,7 @@ export default async function EditSupplierPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SupplierEditForm supplier={supplier} />
+          <SupplierEditForm supplier={supplier as Parameters<typeof SupplierEditForm>[0]['supplier']} />
         </CardContent>
       </Card>
     </div>

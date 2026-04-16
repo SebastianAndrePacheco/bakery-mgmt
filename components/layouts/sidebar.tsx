@@ -16,6 +16,10 @@ import {
   ChefHat,
   ShoppingBag,
   Settings,
+  Briefcase,
+  UserCheck,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -79,9 +83,30 @@ const menuItems: MenuItem[] = [
     roles: ['admin', 'panadero', 'cajero'],
   },
   {
+    title: 'Empleados',
+    icon: UserCheck,
+    roles: ['admin'],
+    children: [
+      { title: 'Listado',  icon: Users,     href: '/empleados',        roles: ['admin'] },
+      { title: 'Cargos',   icon: Briefcase, href: '/empleados/cargos', roles: ['admin'] },
+    ],
+  },
+  {
     title: 'Usuarios',
     icon: Users,
     href: '/usuarios',
+    roles: ['admin'],
+  },
+  {
+    title: 'Configuración',
+    icon: Building2,
+    href: '/configuracion',
+    roles: ['admin'],
+  },
+  {
+    title: 'Auditoría',
+    icon: ShieldCheck,
+    href: '/auditoria',
     roles: ['admin'],
   },
 ]

@@ -27,6 +27,10 @@ export type PurchaseOrderStatus = 'pendiente' | 'enviado' | 'recibido_completo' 
 export type AlertType = 'stock_minimo' | 'vencimiento_proximo' | 'vencido' | 'produccion_pendiente'
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 export type ComprobanteTipo = 'factura' | 'boleta' | 'ticket' | 'recibo'
+export type TipoDocumento   = 'DNI' | 'CE' | 'Pasaporte'
+export type GeneroTipo      = 'M' | 'F' | 'Otro'
+export type TipoContrato    = 'indefinido' | 'plazo_fijo' | 'part_time' | 'recibo_honorarios'
+export type TipoCuentaBanco = 'ahorros' | 'corriente'
 
 // Interfaces principales
 export interface Category {
@@ -53,13 +57,81 @@ export interface Supplier {
   id: string
   business_name: string
   ruc?: string
+  // Empresa
+  nombre_comercial?: string
+  tipo_proveedor?: string
+  estado_sunat?: string
+  condicion_sunat?: string
+  direccion_fiscal?: string
+  telefono_empresa?: string
+  email_empresa?: string
+  web?: string
+  // Contacto (campos legacy conservados + nuevos separados)
   contact_name: string
   phone: string
   email?: string
   address?: string
+  contact_cargo?: string
+  contact_dni?: string
+  contact_phone?: string
+  contact_email?: string
+  contact_whatsapp?: string
+  // Pago
+  banco?: string
+  tipo_cuenta?: TipoCuentaBanco
+  numero_cuenta?: string
+  cci?: string
+  moneda?: string
   is_active: boolean
   created_at: string
   updated_at: string
+}
+
+export interface Cargo {
+  id: string
+  nombre: string
+  descripcion?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Persona {
+  id: string
+  tipo_doc: TipoDocumento
+  numero_doc: string
+  nombres: string
+  apellido_paterno: string
+  apellido_materno?: string
+  fecha_nacimiento?: string
+  genero?: GeneroTipo
+  telefono?: string
+  email?: string
+  direccion?: string
+  foto_url?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Empleado {
+  id: string
+  persona_id: string
+  cargo_id: string
+  user_id?: string
+  fecha_ingreso: string
+  fecha_cese?: string
+  tipo_contrato: TipoContrato
+  sueldo_base?: number
+  banco?: string
+  tipo_cuenta?: TipoCuentaBanco
+  numero_cuenta?: string
+  cci?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  // Relations
+  persona?: Persona
+  cargo?: Cargo
 }
 
 export interface Supply {
@@ -188,12 +260,30 @@ export interface InventoryMovement {
   unit?: Unit
 }
 
+export interface EmpresaConfig {
+  id: string
+  razon_social: string
+  nombre_comercial?: string
+  ruc?: string
+  direccion_fiscal?: string
+  telefono?: string
+  email?: string
+  web?: string
+  igv: number
+  moneda: string
+  logo_url?: string
+  updated_at: string
+}
+
 export interface UserProfile {
   id: string
   full_name: string
   role: UserRole
   phone?: string
+  empleado_id?: string
   is_active: boolean
   created_at: string
   updated_at: string
+  // Relations
+  empleado?: Empleado
 }

@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, Package, DollarSign, Calendar, ShoppingCart, Trash2, AlertTriangle } from 'lucide-react'
+import { TrendingUp, Package, DollarSign, ShoppingCart, Trash2, AlertTriangle } from 'lucide-react'
 import { formatCurrency } from '@/utils/helpers/currency'
 import Link from 'next/link'
 
@@ -13,6 +13,7 @@ export default async function ReportsPage() {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0]
 
   const [
+    { data: empresaConfig },
     { data: purchaseOrders },
     { data: productions },
     { data: supplyBatches },
@@ -21,6 +22,7 @@ export default async function ReportsPage() {
     { data: expiringBatches },
     { data: productionMovements },
   ] = await Promise.all([
+    supabase.from('empresa_config').select('razon_social, ruc').single(),
     supabase.from('purchase_orders').select('total').gte('order_date', monthStart).in('status', ['recibido_completo', 'recibido_parcial']),
     supabase.from('production_orders').select('quantity_produced').gte('production_date', monthStart).eq('status', 'completada'),
     supabase.from('supply_batches').select('current_quantity, unit_price').eq('status', 'disponible'),
@@ -148,9 +150,11 @@ export default async function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Reportes</h1>
-        <p className="text-muted-foreground">
-          Panificadora Ofelia E.I.R.L. — RUC 20452630371
-        </p>
+        {empresaConfig && (
+          <p className="text-muted-foreground">
+            {empresaConfig.razon_social}{empresaConfig.ruc ? ` — RUC ${empresaConfig.ruc}` : ''}
+          </p>
+        )}
       </div>
 
       {/* Métricas del mes */}

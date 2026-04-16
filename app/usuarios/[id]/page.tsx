@@ -28,15 +28,24 @@ export default async function EditarUsuarioPage({
   if (myProfile?.role !== 'admin') redirect('/dashboard')
   if (id === user.id) redirect('/usuarios')
 
-  const { data: profile } = await supabaseAdmin
-    .from('user_profiles')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [
+    { data: profile },
+    { data: authUser },
+    { data: empleadosSinAcceso },
+  ] = await Promise.all([
+    supabaseAdmin.from('user_profiles').select('*').eq('id', id).single(),
+    supabaseAdmin.auth.admin.getUserById(id),
+    // Empleados sin usuario O el que ya tiene este usuario (para mostrarlo seleccionado)
+    supabaseAdmin
+      .from('empleados')
+      .select(`id, user_id, persona:personas(nombres, apellido_paterno), cargo:cargos(nombre)`)
+      .or(`user_id.is.null,user_id.eq.${id}`)
+      .eq('is_active', true)
+      .order('created_at'),
+  ])
 
   if (!profile) notFound()
 
-  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(id)
   const email = authUser.user?.email ?? ''
 
   return (
@@ -65,11 +74,13 @@ export default async function EditarUsuarioPage({
           <UserEditForm
             userId={id}
             defaultValues={{
-              full_name: profile.full_name,
-              role:      profile.role,
-              phone:     profile.phone ?? '',
-              is_active: profile.is_active,
+              full_name:   profile.full_name,
+              role:        profile.role,
+              phone:       profile.phone ?? '',
+              is_active:   profile.is_active,
+              empleado_id: profile.empleado_id ?? '',
             }}
+            empleados={(empleadosSinAcceso ?? []) as unknown as Parameters<typeof UserEditForm>[0]['empleados']}
           />
         </CardContent>
       </Card>

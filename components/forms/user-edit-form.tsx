@@ -5,17 +5,26 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { adminUpdateUser, adminResetPassword } from '@/app/actions'
 
+interface EmpleadoOption {
+  id: string
+  user_id?: string | null
+  persona: { nombres: string; apellido_paterno: string } | null
+  cargo:   { nombre: string } | null
+}
+
 interface UserEditFormProps {
   userId: string
   defaultValues: {
-    full_name: string
-    role:      'admin' | 'panadero' | 'cajero'
-    phone:     string
-    is_active: boolean
+    full_name:   string
+    role:        'admin' | 'panadero' | 'cajero'
+    phone:       string
+    is_active:   boolean
+    empleado_id: string
   }
+  empleados: EmpleadoOption[]
 }
 
-export function UserEditForm({ userId, defaultValues }: UserEditFormProps) {
+export function UserEditForm({ userId, defaultValues, empleados }: UserEditFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,6 +33,8 @@ export function UserEditForm({ userId, defaultValues }: UserEditFormProps) {
   const [formData, setFormData] = useState(defaultValues)
   const [newPassword, setNewPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
+
+  const inputCls = 'w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,6 +52,7 @@ export function UserEditForm({ userId, defaultValues }: UserEditFormProps) {
 
     setSuccess('Usuario actualizado correctamente')
     setLoading(false)
+    router.refresh()
   }
 
   const handlePasswordReset = async () => {
@@ -71,48 +83,70 @@ export function UserEditForm({ userId, defaultValues }: UserEditFormProps) {
             Nombre Completo <span className="text-red-600">*</span>
           </label>
           <input
-            type="text"
-            required
-            value={formData.full_name}
+            type="text" required value={formData.full_name}
             onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            className={inputCls}
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Rol</label>
+          <label className="text-sm font-medium">Rol en el sistema</label>
           <select
             value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'panadero' | 'cajero' })}
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            onChange={(e) => setFormData({ ...formData, role: e.target.value as typeof formData.role })}
+            className={inputCls}
           >
             <option value="panadero">Panadero</option>
             <option value="cajero">Cajero</option>
             <option value="admin">Administrador</option>
           </select>
+          <p className="text-xs text-slate-500">El rol define qué partes del sistema puede ver y usar.</p>
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Teléfono</label>
           <input
-            type="tel"
-            value={formData.phone}
+            type="tel" value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            className={inputCls}
           />
         </div>
 
         <div className="flex items-center gap-3">
           <input
-            type="checkbox"
-            id="is_active"
+            type="checkbox" id="is_active"
             checked={formData.is_active}
             onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
             className="w-4 h-4 rounded border-input"
           />
-          <label htmlFor="is_active" className="text-sm font-medium">
-            Usuario activo
+          <label htmlFor="is_active" className="text-sm font-medium">Usuario activo</label>
+        </div>
+
+        {/* Vincular empleado */}
+        <div className="space-y-2 pt-2 border-t">
+          <label className="text-sm font-medium">
+            Ficha de empleado vinculada <span className="text-slate-400 font-normal">(opcional)</span>
           </label>
+          <select
+            value={formData.empleado_id}
+            onChange={(e) => setFormData({ ...formData, empleado_id: e.target.value })}
+            className={inputCls}
+          >
+            <option value="">— Sin vincular —</option>
+            {empleados.map((emp) => {
+              const p = emp.persona as { nombres: string; apellido_paterno: string } | null
+              const nombre = p ? `${p.nombres} ${p.apellido_paterno}` : 'Sin nombre'
+              const cargo  = (emp.cargo as { nombre: string } | null)?.nombre ?? ''
+              return (
+                <option key={emp.id} value={emp.id}>
+                  {nombre}{cargo ? ` — ${cargo}` : ''}
+                </option>
+              )
+            })}
+          </select>
+          <p className="text-xs text-slate-500">
+            Vincula al usuario con su expediente de empleado.
+          </p>
         </div>
 
         {error && (
@@ -130,12 +164,7 @@ export function UserEditForm({ userId, defaultValues }: UserEditFormProps) {
           <Button type="submit" disabled={loading} className="flex-1">
             {loading ? 'Guardando...' : 'Guardar Cambios'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push('/usuarios')}
-            disabled={loading}
-          >
+          <Button type="button" variant="outline" onClick={() => router.push('/usuarios')} disabled={loading}>
             Cancelar
           </Button>
         </div>
@@ -145,15 +174,13 @@ export function UserEditForm({ userId, defaultValues }: UserEditFormProps) {
         <p className="text-sm font-medium text-slate-700">Cambiar Contraseña</p>
         <div className="flex gap-2">
           <input
-            type="password"
-            value={newPassword}
+            type="password" value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="Nueva contraseña (mín. 8 caracteres)"
             className="flex-1 px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <Button
-            type="button"
-            variant="outline"
+            type="button" variant="outline"
             onClick={handlePasswordReset}
             disabled={changingPassword || newPassword.length === 0}
           >
