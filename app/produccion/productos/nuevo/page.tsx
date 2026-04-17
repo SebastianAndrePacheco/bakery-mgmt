@@ -9,18 +9,14 @@ import { Breadcrumb } from '@/components/ui/breadcrumb'
 export default async function NewProductPage() {
   const supabase = await createClient()
 
-  // Obtener categorías de tipo 'producto'
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('type', 'producto')
-    .order('name', { ascending: true })
+  const [{ data: categories }, { data: units }, { data: lastProduct }] = await Promise.all([
+    supabase.from('categories').select('*').eq('type', 'producto').order('name'),
+    supabase.from('units').select('*').order('name'),
+    supabase.from('products').select('code').like('code', 'PRD-%').order('code', { ascending: false }).limit(1),
+  ])
 
-  // Obtener unidades
-  const { data: units } = await supabase
-    .from('units')
-    .select('*')
-    .order('name', { ascending: true })
+  const lastNum = lastProduct?.[0]?.code ? parseInt(lastProduct[0].code.replace('PRD-', '') || '0') : 0
+  const nextCode = `PRD-${String(lastNum + 1).padStart(3, '0')}`
 
   return (
     <div className="space-y-6">
@@ -51,7 +47,7 @@ export default async function NewProductPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ProductForm categories={categories || []} units={units || []} />
+          <ProductForm categories={categories || []} units={units || []} nextCode={nextCode} />
         </CardContent>
       </Card>
     </div>

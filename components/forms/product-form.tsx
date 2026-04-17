@@ -10,15 +10,16 @@ import { createProduct } from '@/app/actions'
 interface ProductFormProps {
   categories: Category[]
   units: Unit[]
+  nextCode?: string
 }
 
-export function ProductForm({ categories, units }: ProductFormProps) {
+export function ProductForm({ categories, units, nextCode = 'PRD-001' }: ProductFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
-    code: '',
+    code: nextCode,
     name: '',
     category_id: '',
     unit_id: '',
@@ -49,18 +50,17 @@ export function ProductForm({ categories, units }: ProductFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Código */}
+        {/* Código — autogenerado */}
         <div className="space-y-2">
           <label className="text-sm font-medium">
             Código <span className="text-red-600">*</span>
+            <span className="ml-2 text-xs font-normal text-slate-400">autogenerado, puedes modificarlo</span>
           </label>
           <input
-            type="text"
-            required
+            type="text" required
             value={formData.code}
             onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-            placeholder="PAN-001"
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring uppercase"
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring font-mono"
           />
         </div>
 

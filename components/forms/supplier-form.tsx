@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Supplier } from '@/utils/types/database.types'
 import { createSupplier, updateSupplier } from '@/app/actions'
 import { toast } from 'sonner'
+import { validarRUC, validarCelular, validarEmail } from '@/utils/validators'
 
 interface SupplierFormProps {
   supplier?: Supplier
@@ -17,7 +18,26 @@ const BANCOS = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'BanBif', 'Mibanco', '
 export function SupplierForm({ supplier }: SupplierFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const isEdit = !!supplier
+
+  const validate = () => {
+    const e: Record<string, string> = {}
+    const rucErr = validarRUC(empresa.ruc)
+    if (rucErr) e.ruc = rucErr
+    const telEmpErr = validarCelular(empresa.telefono_empresa)
+    if (telEmpErr) e.telefono_empresa = telEmpErr
+    const emailEmpErr = validarEmail(empresa.email_empresa)
+    if (emailEmpErr) e.email_empresa = emailEmpErr
+    const telCtErr = validarCelular(contacto.contact_phone)
+    if (telCtErr) e.contact_phone = telCtErr
+    const waErr = validarCelular(contacto.contact_whatsapp)
+    if (waErr) e.contact_whatsapp = waErr
+    const emailCtErr = validarEmail(contacto.contact_email)
+    if (emailCtErr) e.contact_email = emailCtErr
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
 
   const [empresa, setEmpresa] = useState({
     business_name:    supplier?.business_name    ?? '',
@@ -53,6 +73,7 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validate()) return
     setLoading(true)
 
     const payload = {
@@ -124,8 +145,9 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
               type="text" maxLength={11} value={empresa.ruc}
               onChange={(e) => setEmpresa({ ...empresa, ruc: e.target.value.replace(/\D/g, '') })}
               placeholder="20123456789"
-              className={inputCls}
+              className={inputCls + (errors.ruc ? ' border-red-400' : '')}
             />
+            {errors.ruc && <p className="text-xs text-red-600">{errors.ruc}</p>}
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>Tipo de proveedor</label>
@@ -206,11 +228,12 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
           <div className="space-y-1.5">
             <label className={labelCls}>Teléfono de la empresa</label>
             <input
-              type="tel" value={empresa.telefono_empresa}
-              onChange={(e) => setEmpresa({ ...empresa, telefono_empresa: e.target.value })}
-              placeholder="01 234 5678"
-              className={inputCls}
+              type="tel" maxLength={9} value={empresa.telefono_empresa}
+              onChange={(e) => setEmpresa({ ...empresa, telefono_empresa: e.target.value.replace(/\D/g, '') })}
+              placeholder="999999999"
+              className={inputCls + (errors.telefono_empresa ? ' border-red-400' : '')}
             />
+            {errors.telefono_empresa && <p className="text-xs text-red-600">{errors.telefono_empresa}</p>}
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>Email corporativo</label>
@@ -218,8 +241,9 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
               type="email" value={empresa.email_empresa}
               onChange={(e) => setEmpresa({ ...empresa, email_empresa: e.target.value })}
               placeholder="ventas@empresa.com"
-              className={inputCls}
+              className={inputCls + (errors.email_empresa ? ' border-red-400' : '')}
             />
+            {errors.email_empresa && <p className="text-xs text-red-600">{errors.email_empresa}</p>}
           </div>
         </div>
       </section>
@@ -260,20 +284,22 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
           <div className="space-y-1.5">
             <label className={labelCls}>Celular directo</label>
             <input
-              type="tel" value={contacto.contact_phone}
-              onChange={(e) => setContacto({ ...contacto, contact_phone: e.target.value })}
-              placeholder="999 999 999"
-              className={inputCls}
+              type="tel" maxLength={9} value={contacto.contact_phone}
+              onChange={(e) => setContacto({ ...contacto, contact_phone: e.target.value.replace(/\D/g, '') })}
+              placeholder="999999999"
+              className={inputCls + (errors.contact_phone ? ' border-red-400' : '')}
             />
+            {errors.contact_phone && <p className="text-xs text-red-600">{errors.contact_phone}</p>}
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>WhatsApp</label>
             <input
-              type="tel" value={contacto.contact_whatsapp}
-              onChange={(e) => setContacto({ ...contacto, contact_whatsapp: e.target.value })}
-              placeholder="999 999 999"
-              className={inputCls}
+              type="tel" maxLength={9} value={contacto.contact_whatsapp}
+              onChange={(e) => setContacto({ ...contacto, contact_whatsapp: e.target.value.replace(/\D/g, '') })}
+              placeholder="999999999"
+              className={inputCls + (errors.contact_whatsapp ? ' border-red-400' : '')}
             />
+            {errors.contact_whatsapp && <p className="text-xs text-red-600">{errors.contact_whatsapp}</p>}
           </div>
         </div>
 
@@ -282,8 +308,9 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
           <input
             type="email" value={contacto.contact_email}
             onChange={(e) => setContacto({ ...contacto, contact_email: e.target.value })}
-            className={inputCls}
+            className={inputCls + (errors.contact_email ? ' border-red-400' : '')}
           />
+          {errors.contact_email && <p className="text-xs text-red-600">{errors.contact_email}</p>}
         </div>
       </section>
 

@@ -160,9 +160,11 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
             id="expected_delivery_date"
             type="date"
             value={formData.expected_delivery_date}
+            min={localDateString()}
             onChange={(e) => setFormData({ ...formData, expected_delivery_date: e.target.value })}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
+          <p className="text-xs text-slate-500">Solo fechas desde hoy en adelante</p>
         </div>
 
         <div className="space-y-2">
@@ -213,7 +215,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
 
               <div className="col-span-2 space-y-2">
                 <label className="text-xs font-medium text-slate-600">
-                  Cantidad
+                  Cantidad {item.supply_id ? `(${supplies.find(s => s.id === item.supply_id)?.unit?.symbol ?? ''})` : ''}
                 </label>
                 <input
                   type="number"

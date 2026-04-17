@@ -7,6 +7,14 @@ import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { receivePurchaseOrder } from '@/app/actions'
+import { localDateString } from '@/utils/helpers/currency'
+
+const SERIES_POR_TIPO: Record<string, string> = {
+  factura: 'F001',
+  boleta:  'B001',
+  ticket:  'T001',
+  recibo:  'R001',
+}
 
 interface ReceiveOrderItem {
   id: string
@@ -33,11 +41,11 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
   const [formData, setFormData] = useState({
     guia_remision: '',
     comprobante_tipo: 'factura',
-    comprobante_serie: '',
+    comprobante_serie: 'F001',
     comprobante_numero: '',
-    comprobante_fecha: new Date().toISOString().split('T')[0],
+    comprobante_fecha: localDateString(),
     comprobante_monto: order.total.toString(),
-    received_date: new Date().toISOString().split('T')[0],
+    received_date: localDateString(),
   })
 
   const [receivedQuantities, setReceivedQuantities] = useState<Record<string, string>>(
@@ -128,7 +136,11 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
             <select
               required
               value={formData.comprobante_tipo}
-              onChange={(e) => setFormData({ ...formData, comprobante_tipo: e.target.value })}
+              onChange={(e) => setFormData({
+                ...formData,
+                comprobante_tipo: e.target.value,
+                comprobante_serie: SERIES_POR_TIPO[e.target.value] ?? '',
+              })}
               className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="factura">Factura</option>
@@ -175,7 +187,7 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
               required
               value={formData.comprobante_fecha}
               onChange={(e) => setFormData({ ...formData, comprobante_fecha: e.target.value })}
-              max={new Date().toISOString().split('T')[0]}
+              max={localDateString()}
               className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -206,7 +218,7 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
           required
           value={formData.received_date}
           onChange={(e) => setFormData({ ...formData, received_date: e.target.value })}
-          max={new Date().toISOString().split('T')[0]}
+          max={localDateString()}
           className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
@@ -223,7 +235,9 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Cantidad Recibida</label>
+              <label className="text-sm font-medium">
+              Cantidad recibida {item.supply.unit?.symbol ? `(${item.supply.unit.symbol})` : ''}
+            </label>
               <input
                 type="number"
                 step="any"
@@ -246,7 +260,7 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
                   ...expirationDates,
                   [item.id]: e.target.value
                 })}
-                min={new Date().toISOString().split('T')[0]}
+                min={localDateString()}
                 className="w-full px-3 py-2 border border-input rounded-md"
               />
             </div>

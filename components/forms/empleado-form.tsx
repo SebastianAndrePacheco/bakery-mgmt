@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Cargo, Empleado, Persona } from '@/utils/types/database.types'
 import { createEmpleado, updateEmpleado } from '@/app/actions'
 import { localDateString } from '@/utils/helpers/currency'
+import { validarDNI, validarCelular, validarEmail, validarCE } from '@/utils/validators'
 import { toast } from 'sonner'
 
 interface EmpleadoFormProps {
@@ -18,7 +19,24 @@ const BANCOS = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'BanBif', 'Mibanco', '
 export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const isEdit = !!empleado
+
+  const validate = () => {
+    const e: Record<string, string> = {}
+    const docError = persona.tipo_doc === 'DNI'
+      ? validarDNI(persona.numero_doc)
+      : persona.tipo_doc === 'CE'
+        ? validarCE(persona.numero_doc)
+        : null
+    if (docError) e.numero_doc = docError
+    const celError = validarCelular(persona.telefono)
+    if (celError) e.telefono = celError
+    const emailError = validarEmail(persona.email)
+    if (emailError) e.email = emailError
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
 
   const [persona, setPersona] = useState({
     tipo_doc:         empleado?.persona?.tipo_doc         ?? 'DNI',
@@ -48,6 +66,7 @@ export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validate()) return
     setLoading(true)
 
     const payload = {
@@ -105,10 +124,11 @@ export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
             <input
               required type="text" value={persona.numero_doc}
               maxLength={persona.tipo_doc === 'DNI' ? 8 : 20}
-              onChange={(e) => setPersona({ ...persona, numero_doc: e.target.value })}
+              onChange={(e) => setPersona({ ...persona, numero_doc: e.target.value.replace(/\D/g, '') })}
               placeholder={persona.tipo_doc === 'DNI' ? '12345678' : ''}
-              className={inputCls}
+              className={inputCls + (errors.numero_doc ? ' border-red-400' : '')}
             />
+            {errors.numero_doc && <p className="text-xs text-red-600">{errors.numero_doc}</p>}
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>Género</label>
@@ -166,18 +186,21 @@ export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
             <label className={labelCls}>Teléfono / Celular</label>
             <input
               type="tel" value={persona.telefono}
-              onChange={(e) => setPersona({ ...persona, telefono: e.target.value })}
-              placeholder="999 999 999"
-              className={inputCls}
+              maxLength={9}
+              onChange={(e) => setPersona({ ...persona, telefono: e.target.value.replace(/\D/g, '') })}
+              placeholder="999999999"
+              className={inputCls + (errors.telefono ? ' border-red-400' : '')}
             />
+            {errors.telefono && <p className="text-xs text-red-600">{errors.telefono}</p>}
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>Correo electrónico</label>
             <input
               type="email" value={persona.email}
               onChange={(e) => setPersona({ ...persona, email: e.target.value })}
-              className={inputCls}
+              className={inputCls + (errors.email ? ' border-red-400' : '')}
             />
+            {errors.email && <p className="text-xs text-red-600">{errors.email}</p>}
           </div>
         </div>
 
