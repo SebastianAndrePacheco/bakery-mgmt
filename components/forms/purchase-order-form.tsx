@@ -21,8 +21,8 @@ interface PurchaseOrderFormProps {
 interface OrderItem {
   supply_id: string
   quantity: number
-  unit_price: number  // Precio CON IGV incluido
-  total: number       // Total CON IGV incluido
+  unit_price: number  // Precio NETO sin IGV (valor de venta)
+  total: number       // Subtotal neto sin IGV (qty × unit_price)
 }
 
 export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProps) {
@@ -52,7 +52,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: value }
     
-    // Calcular total del item (precio unitario ya incluye IGV)
+    // total = subtotal neto del ítem (sin IGV)
     if (field === 'quantity' || field === 'unit_price') {
       newItems[index].total = multiplyQtyPrice(newItems[index].quantity, newItems[index].unit_price)
     }
@@ -64,15 +64,9 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     let subtotal = 0
     let tax = 0
     for (const item of items) {
-      const supply = supplies.find(s => s.id === item.supply_id)
-      const afecto = supply ? supply.afecto_igv : true
-      if (afecto) {
-        const s = round2(item.total / 1.18)
-        subtotal += s
-        tax += round2(item.total - s)
-      } else {
-        subtotal += item.total
-      }
+      subtotal += item.total  // valor neto sin IGV
+      const tasa = supplies.find(s => s.id === item.supply_id)?.tasa_igv ?? 18
+      tax += round2(item.total * (tasa / 100))
     }
     return { subtotal: round2(subtotal), tax: round2(tax), total: round2(subtotal + tax) }
   }
@@ -238,9 +232,12 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
 
               <div className="col-span-2 space-y-2">
                 <label className="text-xs font-medium text-slate-600">
-                  {supplies.find(s => s.id === item.supply_id)?.afecto_igv === false
-                    ? 'Precio Unit. (exento)'
-                    : 'Precio Unit. (c/IGV)'}
+                  Precio Unit. (sin IGV)
+                  {(() => {
+                    const tasa = supplies.find(s => s.id === item.supply_id)?.tasa_igv
+                    if (tasa === undefined || !item.supply_id) return null
+                    return <span className="ml-1 text-slate-400">[IGV {tasa}%]</span>
+                  })()}
                 </label>
                 <input
                   type="number"
@@ -285,13 +282,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
           <span className="font-semibold">{formatCurrency(subtotal)}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-slate-600">
-            IGV (18%)
-            {items.some(i => supplies.find(s => s.id === i.supply_id)?.afecto_igv === false) && (
-              <span className="ml-1 text-xs text-slate-400">* solo ítems afectos</span>
-            )}
-            :
-          </span>
+          <span className="text-slate-600">IGV:</span>
           <span className="font-semibold">{formatCurrency(tax)}</span>
         </div>
         <div className="flex justify-between text-lg border-t border-slate-200 pt-3">

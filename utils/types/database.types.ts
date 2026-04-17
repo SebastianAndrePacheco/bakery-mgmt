@@ -143,7 +143,7 @@ export interface Supply {
   unit_id: string
   min_stock: number
   storage_conditions?: string
-  afecto_igv: boolean
+  tasa_igv: number
   is_active: boolean
   created_at: string
   updated_at: string

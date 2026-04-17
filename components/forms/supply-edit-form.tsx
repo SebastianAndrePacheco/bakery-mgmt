@@ -23,7 +23,7 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
     unit_id: supply.unit_id,
     min_stock: supply.min_stock,
     storage_conditions: supply.storage_conditions || '',
-    afecto_igv: supply.afecto_igv,
+    tasa_igv: supply.tasa_igv,
     is_active: supply.is_active,
   })
 
@@ -144,23 +144,21 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <input
-            id="afecto_igv"
-            type="checkbox"
-            checked={formData.afecto_igv}
-            onChange={(e) => setFormData({ ...formData, afecto_igv: e.target.checked })}
-            className="w-4 h-4 rounded border-input"
-          />
-          <label htmlFor="afecto_igv" className="text-sm font-medium">
-            Afecto a IGV (18%)
-            <span className="ml-2 text-xs font-normal text-slate-500">
-              Desmarcar si el insumo está exonerado de IGV
-            </span>
-          </label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Tasa IGV (%)</label>
+          <select
+            value={formData.tasa_igv}
+            onChange={(e) => setFormData({ ...formData, tasa_igv: parseFloat(e.target.value) })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value={18}>18% — Afecto estándar</option>
+            <option value={0}>0% — Exonerado / Inafecto</option>
+            <option value={10}>10% — Tasa reducida</option>
+          </select>
+          <p className="text-xs text-slate-500">Para alimentos básicos aplica 0%</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pb-2">
           <input
             id="is_active"
             type="checkbox"
@@ -168,9 +166,7 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
             onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
             className="w-4 h-4 rounded border-input"
           />
-          <label htmlFor="is_active" className="text-sm font-medium">
-            Insumo activo
-          </label>
+          <label htmlFor="is_active" className="text-sm font-medium">Insumo activo</label>
         </div>
       </div>
 

@@ -118,7 +118,7 @@ const SupplySchema = z.object({
   unit_id: uuid,
   min_stock: z.number().min(0, 'Stock mínimo no puede ser negativo'),
   storage_conditions: z.string().max(500).optional().or(z.literal('')),
-  afecto_igv: z.boolean().default(true),
+  tasa_igv: z.number().min(0).max(100).default(18),
   is_active: z.boolean().default(true),
 })
 

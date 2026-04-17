@@ -23,7 +23,7 @@ export function SupplyForm({ categories, units, nextCode = 'INS-001' }: SupplyFo
     unit_id: '',
     min_stock: '',
     storage_conditions: '',
-    afecto_igv: true,
+    tasa_igv: 18,
     is_active: true,
   })
 
@@ -155,22 +155,21 @@ export function SupplyForm({ categories, units, nextCode = 'INS-001' }: SupplyFo
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <input
-            id="afecto_igv" type="checkbox"
-            checked={formData.afecto_igv}
-            onChange={(e) => setFormData({ ...formData, afecto_igv: e.target.checked })}
-            className="w-4 h-4 rounded"
-          />
-          <label htmlFor="afecto_igv" className={labelCls}>
-            Afecto a IGV (18%)
-            <span className="ml-2 text-xs font-normal text-slate-500">
-              Desmarcar si el insumo está exonerado de IGV
-            </span>
-          </label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div className="space-y-1.5">
+          <label className={labelCls}>Tasa IGV (%)</label>
+          <select
+            value={formData.tasa_igv}
+            onChange={(e) => setFormData({ ...formData, tasa_igv: parseFloat(e.target.value) })}
+            className={inputCls}
+          >
+            <option value={18}>18% — Afecto estándar</option>
+            <option value={0}>0% — Exonerado / Inafecto</option>
+            <option value={10}>10% — Tasa reducida</option>
+          </select>
+          <p className="text-xs text-slate-500">Para alimentos básicos aplica 0%</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pb-2">
           <input
             id="is_active" type="checkbox"
             checked={formData.is_active}

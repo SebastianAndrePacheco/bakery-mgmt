@@ -2,10 +2,11 @@
 -- Phase 2: IGV diferenciado, correlativos, categoría proveedor
 -- ============================================================
 
--- 1. IGV diferenciado en insumos
---    afecto_igv = true  → precio incluye IGV 18%  (default)
---    afecto_igv = false → insumo exonerado de IGV
-ALTER TABLE supplies ADD COLUMN IF NOT EXISTS afecto_igv boolean NOT NULL DEFAULT true;
+-- 1. Tasa IGV por insumo (flexible)
+--    18  → afecto al IGV estándar (default)
+--     0  → exonerado / inafecto
+--    Cualquier otro valor para tasas especiales
+ALTER TABLE supplies ADD COLUMN IF NOT EXISTS tasa_igv numeric(5,2) NOT NULL DEFAULT 18;
 
 -- 2. Tabla de correlativos de comprobantes
 --    Guarda el último número usado por tipo + serie para sugerir el siguiente
