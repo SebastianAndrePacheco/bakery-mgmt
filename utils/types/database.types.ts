@@ -23,7 +23,16 @@ export type UserRole = 'admin' | 'panadero' | 'cajero'
 export type BatchStatus = 'disponible' | 'agotado' | 'vencido'
 export type ProductionStatus = 'programada' | 'en_proceso' | 'completada' | 'cancelada'
 export type ProductionOrderType = 'programada' | 'especial'
-export type PurchaseOrderStatus = 'pendiente' | 'enviado' | 'recibido_completo' | 'recibido_parcial' | 'cancelado' | 'retrasado'
+export type PurchaseOrderStatus = 'borrador' | 'pendiente_aprobacion' | 'aprobado' | 'rechazado' | 'pendiente' | 'enviado' | 'recibido_completo' | 'recibido_parcial' | 'cancelado' | 'retrasado'
+
+export interface PurchaseOrderApproval {
+  id: string
+  purchase_order_id: string
+  action: 'submitted' | 'approved' | 'rejected' | 'cancelled' | 'sent'
+  comment?: string
+  created_by?: string
+  created_at: string
+}
 export type AlertType = 'stock_minimo' | 'vencimiento_proximo' | 'vencido' | 'produccion_pendiente'
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 export type ComprobanteTipo = 'factura' | 'boleta' | 'ticket' | 'recibo'

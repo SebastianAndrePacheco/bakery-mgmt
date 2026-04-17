@@ -16,21 +16,29 @@ interface PurchaseOrdersTableProps {
 }
 
 const statusColors: Record<PurchaseOrder['status'], string> = {
-  pendiente: 'bg-yellow-100 text-yellow-700',
-  enviado: 'bg-blue-100 text-blue-700',
-  recibido_parcial: 'bg-orange-100 text-orange-700',
-  recibido_completo: 'bg-emerald-100 text-emerald-700',
-  retrasado: 'bg-purple-100 text-purple-700',
-  cancelado: 'bg-red-100 text-red-700',
+  borrador:             'bg-slate-100 text-slate-600',
+  pendiente_aprobacion: 'bg-amber-100 text-amber-700',
+  aprobado:             'bg-blue-100 text-blue-700',
+  rechazado:            'bg-red-100 text-red-700',
+  pendiente:            'bg-yellow-100 text-yellow-700',
+  enviado:              'bg-indigo-100 text-indigo-700',
+  recibido_parcial:     'bg-orange-100 text-orange-700',
+  recibido_completo:    'bg-emerald-100 text-emerald-700',
+  retrasado:            'bg-purple-100 text-purple-700',
+  cancelado:            'bg-red-100 text-red-600',
 }
 
 const statusLabels: Record<PurchaseOrder['status'], string> = {
-  pendiente: 'Pendiente',
-  enviado: 'Enviado',
-  recibido_parcial: 'Recibido Parcial',
-  recibido_completo: 'Recibido Completo',
-  retrasado: 'Retrasado',
-  cancelado: 'Cancelado',
+  borrador:             'Borrador',
+  pendiente_aprobacion: 'Pend. aprobación',
+  aprobado:             'Aprobado',
+  rechazado:            'Rechazado',
+  pendiente:            'Pendiente',
+  enviado:              'Enviado',
+  recibido_parcial:     'Recibido Parcial',
+  recibido_completo:    'Recibido Completo',
+  retrasado:            'Retrasado',
+  cancelado:            'Cancelado',
 }
 
 export function PurchaseOrdersTable({ orders }: PurchaseOrdersTableProps) {

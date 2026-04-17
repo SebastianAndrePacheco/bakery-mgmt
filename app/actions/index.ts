@@ -587,12 +587,14 @@ export async function createPurchaseOrder(data: unknown): Promise<ActionResult> 
   const limited = checkRateLimit(`createPurchaseOrder:${user.id}`, 10, 60_000)
   if (limited) return limited
 
+  const orderNumber = `OC-${Date.now()}`
+
   const { error } = await supabase.rpc('create_purchase_order_with_items', {
     p_supplier_id: parsed.data.supplier_id,
     p_order_date: parsed.data.order_date,
     p_expected_delivery_date: parsed.data.expected_delivery_date || null,
     p_notes: parsed.data.notes || null,
-    p_order_number: `OC-${Date.now()}`,
+    p_order_number: orderNumber,
     p_subtotal: parsed.data.subtotal,
     p_tax: parsed.data.tax,
     p_total: parsed.data.total,
@@ -600,6 +602,13 @@ export async function createPurchaseOrder(data: unknown): Promise<ActionResult> 
   })
 
   if (error) return dbError(error, 'createPurchaseOrder')
+
+  // La orden se crea como 'pendiente' por el RPC; la marcamos como borrador
+  await supabase
+    .from('purchase_orders')
+    .update({ status: 'borrador' })
+    .eq('order_number', orderNumber)
+
   revalidatePath('/compras/ordenes')
   return { success: true }
 }
@@ -998,6 +1007,131 @@ export async function upsertEmpresaConfig(data: unknown): Promise<ActionResult> 
   }
 
   revalidatePath('/configuracion')
+  return { success: true }
+}
+
+// ─── Purchase Order Approval Actions ─────────────────────────────────────────
+
+export async function submitForApproval(orderId: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(orderId).success) return { error: 'ID inválido' }
+  const { supabase, user } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+
+  const { data: order } = await supabase
+    .from('purchase_orders').select('status').eq('id', orderId).single()
+  if (!order) return { error: 'Orden no encontrada' }
+  if (order.status !== 'borrador') return { error: 'Solo se pueden enviar órdenes en borrador' }
+
+  const { error } = await supabase
+    .from('purchase_orders').update({ status: 'pendiente_aprobacion' }).eq('id', orderId)
+  if (error) return dbError(error, 'submitForApproval')
+
+  await supabase.from('purchase_order_approvals').insert({
+    purchase_order_id: orderId, action: 'submitted', created_by: user.id,
+  })
+
+  revalidatePath('/compras/ordenes')
+  revalidatePath(`/compras/ordenes/${orderId}`)
+  return { success: true }
+}
+
+export async function approveOrder(orderId: string, comment?: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(orderId).success) return { error: 'ID inválido' }
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  const { data: order } = await supabase
+    .from('purchase_orders').select('status').eq('id', orderId).single()
+  if (!order) return { error: 'Orden no encontrada' }
+  if (order.status !== 'pendiente_aprobacion') return { error: 'La orden no está pendiente de aprobación' }
+
+  const { error } = await supabase
+    .from('purchase_orders').update({ status: 'aprobado' }).eq('id', orderId)
+  if (error) return dbError(error, 'approveOrder')
+
+  await supabase.from('purchase_order_approvals').insert({
+    purchase_order_id: orderId, action: 'approved',
+    comment: comment || null, created_by: user.id,
+  })
+
+  revalidatePath('/compras/ordenes')
+  revalidatePath(`/compras/ordenes/${orderId}`)
+  return { success: true }
+}
+
+export async function rejectOrder(orderId: string, comment: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(orderId).success) return { error: 'ID inválido' }
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  const { data: order } = await supabase
+    .from('purchase_orders').select('status').eq('id', orderId).single()
+  if (!order) return { error: 'Orden no encontrada' }
+  if (order.status !== 'pendiente_aprobacion') return { error: 'La orden no está pendiente de aprobación' }
+
+  const { error } = await supabase
+    .from('purchase_orders').update({ status: 'rechazado' }).eq('id', orderId)
+  if (error) return dbError(error, 'rejectOrder')
+
+  await supabase.from('purchase_order_approvals').insert({
+    purchase_order_id: orderId, action: 'rejected',
+    comment: comment || null, created_by: user.id,
+  })
+
+  revalidatePath('/compras/ordenes')
+  revalidatePath(`/compras/ordenes/${orderId}`)
+  return { success: true }
+}
+
+export async function markOrderSent(orderId: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(orderId).success) return { error: 'ID inválido' }
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  const { data: order } = await supabase
+    .from('purchase_orders').select('status').eq('id', orderId).single()
+  if (!order) return { error: 'Orden no encontrada' }
+  if (order.status !== 'aprobado') return { error: 'Solo se pueden enviar órdenes aprobadas' }
+
+  const { error } = await supabase
+    .from('purchase_orders').update({ status: 'enviado' }).eq('id', orderId)
+  if (error) return dbError(error, 'markOrderSent')
+
+  await supabase.from('purchase_order_approvals').insert({
+    purchase_order_id: orderId, action: 'sent', created_by: user.id,
+  })
+
+  revalidatePath('/compras/ordenes')
+  revalidatePath(`/compras/ordenes/${orderId}`)
+  return { success: true }
+}
+
+export async function cancelOrder(orderId: string, comment?: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(orderId).success) return { error: 'ID inválido' }
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
+  const { data: order } = await supabase
+    .from('purchase_orders').select('status').eq('id', orderId).single()
+  if (!order) return { error: 'Orden no encontrada' }
+  const cancelable = ['borrador', 'pendiente_aprobacion', 'aprobado']
+  if (!cancelable.includes(order.status)) return { error: 'Esta orden no puede cancelarse' }
+
+  const { error } = await supabase
+    .from('purchase_orders').update({ status: 'cancelado' }).eq('id', orderId)
+  if (error) return dbError(error, 'cancelOrder')
+
+  await supabase.from('purchase_order_approvals').insert({
+    purchase_order_id: orderId, action: 'cancelled',
+    comment: comment || null, created_by: user.id,
+  })
+
+  revalidatePath('/compras/ordenes')
+  revalidatePath(`/compras/ordenes/${orderId}`)
   return { success: true }
 }
 
