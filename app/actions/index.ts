@@ -97,6 +97,7 @@ const SupplierSchema = z.object({
   contact_phone:    z.string().max(20).optional().or(z.literal('')),
   contact_email:    optEmail,
   contact_whatsapp: z.string().max(20).optional().or(z.literal('')),
+  categoria_suministro: z.string().max(100).optional().or(z.literal('')),
   // Campos legacy (se mantienen por compatibilidad con columnas NOT NULL en DB)
   phone:            z.string().max(20).optional().or(z.literal('')),
   email:            optEmail,
@@ -117,6 +118,7 @@ const SupplySchema = z.object({
   unit_id: uuid,
   min_stock: z.number().min(0, 'Stock mínimo no puede ser negativo'),
   storage_conditions: z.string().max(500).optional().or(z.literal('')),
+  afecto_igv: z.boolean().default(true),
   is_active: z.boolean().default(true),
 })
 
@@ -238,8 +240,9 @@ function buildSupplierPayload(d: z.infer<typeof SupplierSchema>) {
     contact_dni:      d.contact_dni      || null,
     contact_phone:    d.contact_phone    || null,
     contact_email:    d.contact_email    || null,
-    contact_whatsapp: d.contact_whatsapp || null,
-    banco:            d.banco            || null,
+    contact_whatsapp:     d.contact_whatsapp     || null,
+    categoria_suministro: d.categoria_suministro || null,
+    banco:                d.banco                || null,
     tipo_cuenta:      d.tipo_cuenta      ?? null,
     numero_cuenta:    d.numero_cuenta    || null,
     cci:              d.cci              || null,
@@ -645,10 +648,43 @@ export async function receivePurchaseOrder(data: unknown): Promise<ActionResult>
   })
 
   if (error) return dbError(error, 'receivePurchaseOrder')
+
+  // Actualizar correlativo si el número registrado supera el último guardado
+  const numericNum = parseInt(parsed.data.comprobante_numero.replace(/\D/g, '')) || 0
+  if (numericNum > 0) {
+    const { data: corr } = await supabase
+      .from('comprobante_correlativos')
+      .select('ultimo_numero')
+      .eq('tipo', parsed.data.comprobante_tipo)
+      .eq('serie', parsed.data.comprobante_serie)
+      .maybeSingle()
+
+    if (numericNum > (corr?.ultimo_numero ?? 0)) {
+      await supabase.from('comprobante_correlativos').upsert(
+        { tipo: parsed.data.comprobante_tipo, serie: parsed.data.comprobante_serie, ultimo_numero: numericNum },
+        { onConflict: 'tipo,serie' }
+      )
+    }
+  }
+
   revalidatePath('/compras/ordenes')
   revalidatePath('/inventario/insumos')
   revalidatePath('/inventario/kardex')
   return { success: true }
+}
+
+// ─── Correlativo de comprobantes ─────────────────────────────────────────────
+
+export async function getNextCorrelativo(tipo: string, serie: string): Promise<string> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('comprobante_correlativos')
+    .select('ultimo_numero')
+    .eq('tipo', tipo)
+    .eq('serie', serie)
+    .maybeSingle()
+  const next = (data?.ultimo_numero ?? 0) + 1
+  return String(next).padStart(8, '0')
 }
 
 

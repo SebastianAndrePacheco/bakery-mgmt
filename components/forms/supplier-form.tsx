@@ -13,6 +13,7 @@ interface SupplierFormProps {
 }
 
 const TIPOS_PROVEEDOR = ['Persona Natural', 'EIRL', 'SAC', 'SRL', 'SA', 'SAA', 'Otro']
+const CATEGORIAS_SUMINISTRO = ['Materia prima', 'Empaques', 'Servicios', 'Logística', 'Equipos y herramientas', 'Otro']
 const BANCOS = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'BanBif', 'Mibanco', 'Pichincha', 'Otro']
 
 export function SupplierForm({ supplier }: SupplierFormProps) {
@@ -43,8 +44,9 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
     business_name:    supplier?.business_name    ?? '',
     ruc:              supplier?.ruc              ?? '',
     nombre_comercial: supplier?.nombre_comercial ?? '',
-    tipo_proveedor:   supplier?.tipo_proveedor   ?? '',
-    estado_sunat:     supplier?.estado_sunat     ?? '',
+    tipo_proveedor:       supplier?.tipo_proveedor       ?? '',
+    categoria_suministro: supplier?.categoria_suministro ?? '',
+    estado_sunat:         supplier?.estado_sunat         ?? '',
     condicion_sunat:  supplier?.condicion_sunat  ?? '',
     direccion_fiscal: supplier?.direccion_fiscal ?? supplier?.address ?? '',
     telefono_empresa: supplier?.telefono_empresa ?? supplier?.phone   ?? '',
@@ -173,7 +175,7 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <label className={labelCls}>Estado SUNAT</label>
             <select
@@ -199,6 +201,17 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
               <option value="Habido">Habido</option>
               <option value="No Habido">No Habido</option>
               <option value="No Hallado">No Hallado</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className={labelCls}>Categoría de suministro</label>
+            <select
+              value={empresa.categoria_suministro}
+              onChange={(e) => setEmpresa({ ...empresa, categoria_suministro: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">Sin especificar</option>
+              {CATEGORIAS_SUMINISTRO.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
         </div>

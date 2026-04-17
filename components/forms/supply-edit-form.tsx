@@ -23,6 +23,7 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
     unit_id: supply.unit_id,
     min_stock: supply.min_stock,
     storage_conditions: supply.storage_conditions || '',
+    afecto_igv: supply.afecto_igv,
     is_active: supply.is_active,
   })
 
@@ -143,17 +144,34 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          id="is_active"
-          type="checkbox"
-          checked={formData.is_active}
-          onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-          className="w-4 h-4 rounded border-input"
-        />
-        <label htmlFor="is_active" className="text-sm font-medium">
-          Insumo activo
-        </label>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            id="afecto_igv"
+            type="checkbox"
+            checked={formData.afecto_igv}
+            onChange={(e) => setFormData({ ...formData, afecto_igv: e.target.checked })}
+            className="w-4 h-4 rounded border-input"
+          />
+          <label htmlFor="afecto_igv" className="text-sm font-medium">
+            Afecto a IGV (18%)
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              Desmarcar si el insumo está exonerado de IGV
+            </span>
+          </label>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            id="is_active"
+            type="checkbox"
+            checked={formData.is_active}
+            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+            className="w-4 h-4 rounded border-input"
+          />
+          <label htmlFor="is_active" className="text-sm font-medium">
+            Insumo activo
+          </label>
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

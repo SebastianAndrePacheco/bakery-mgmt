@@ -76,6 +76,7 @@ export interface Supplier {
   contact_phone?: string
   contact_email?: string
   contact_whatsapp?: string
+  categoria_suministro?: string
   // Pago
   banco?: string
   tipo_cuenta?: TipoCuentaBanco
@@ -142,6 +143,7 @@ export interface Supply {
   unit_id: string
   min_stock: number
   storage_conditions?: string
+  afecto_igv: boolean
   is_active: boolean
   created_at: string
   updated_at: string

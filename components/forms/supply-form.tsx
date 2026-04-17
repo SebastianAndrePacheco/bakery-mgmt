@@ -23,6 +23,7 @@ export function SupplyForm({ categories, units, nextCode = 'INS-001' }: SupplyFo
     unit_id: '',
     min_stock: '',
     storage_conditions: '',
+    afecto_igv: true,
     is_active: true,
   })
 
@@ -154,14 +155,30 @@ export function SupplyForm({ categories, units, nextCode = 'INS-001' }: SupplyFo
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          id="is_active" type="checkbox"
-          checked={formData.is_active}
-          onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-          className="w-4 h-4 rounded"
-        />
-        <label htmlFor="is_active" className={labelCls}>Insumo activo</label>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            id="afecto_igv" type="checkbox"
+            checked={formData.afecto_igv}
+            onChange={(e) => setFormData({ ...formData, afecto_igv: e.target.checked })}
+            className="w-4 h-4 rounded"
+          />
+          <label htmlFor="afecto_igv" className={labelCls}>
+            Afecto a IGV (18%)
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              Desmarcar si el insumo está exonerado de IGV
+            </span>
+          </label>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            id="is_active" type="checkbox"
+            checked={formData.is_active}
+            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+            className="w-4 h-4 rounded"
+          />
+          <label htmlFor="is_active" className={labelCls}>Insumo activo</label>
+        </div>
       </div>
 
       <div className="flex gap-4">

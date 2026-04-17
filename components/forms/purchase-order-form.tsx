@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Supplier, Supply, Unit } from '@/utils/types/database.types'
 import { Plus, Trash2 } from 'lucide-react'
-import { calculateSubtotalFromTotal, formatCurrency, localDateString, multiplyQtyPrice, round2 } from '@/utils/helpers/currency'
+import { formatCurrency, localDateString, multiplyQtyPrice, round2 } from '@/utils/helpers/currency'
 import { createPurchaseOrder } from '@/app/actions'
 import { toast } from 'sonner'
 
@@ -60,8 +60,21 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     setItems(newItems)
   }
 
-  const calculateTotalWithIGV = () => {
-    return round2(items.reduce((sum, item) => sum + item.total, 0))
+  const calculateTotals = () => {
+    let subtotal = 0
+    let tax = 0
+    for (const item of items) {
+      const supply = supplies.find(s => s.id === item.supply_id)
+      const afecto = supply ? supply.afecto_igv : true
+      if (afecto) {
+        const s = round2(item.total / 1.18)
+        subtotal += s
+        tax += round2(item.total - s)
+      } else {
+        subtotal += item.total
+      }
+    }
+    return { subtotal: round2(subtotal), tax: round2(tax), total: round2(subtotal + tax) }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,9 +90,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
         return
       }
 
-      const totalWithIGV = calculateTotalWithIGV()
-      const subtotal = calculateSubtotalFromTotal(totalWithIGV)
-      const tax = round2(totalWithIGV - subtotal)
+      const { subtotal, tax, total: totalWithIGV } = calculateTotals()
 
       const result = await createPurchaseOrder({
         supplier_id:            formData.supplier_id,
@@ -110,9 +121,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     }
   }
 
-  const totalWithIGV = calculateTotalWithIGV()
-  const subtotal = calculateSubtotalFromTotal(totalWithIGV)
-  const tax = totalWithIGV - subtotal
+  const { subtotal, tax, total: totalWithIGV } = calculateTotals()
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -229,7 +238,9 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
 
               <div className="col-span-2 space-y-2">
                 <label className="text-xs font-medium text-slate-600">
-                  Precio Unit. (c/IGV)
+                  {supplies.find(s => s.id === item.supply_id)?.afecto_igv === false
+                    ? 'Precio Unit. (exento)'
+                    : 'Precio Unit. (c/IGV)'}
                 </label>
                 <input
                   type="number"
@@ -274,7 +285,13 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
           <span className="font-semibold">{formatCurrency(subtotal)}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-slate-600">IGV (18%):</span>
+          <span className="text-slate-600">
+            IGV (18%)
+            {items.some(i => supplies.find(s => s.id === i.supply_id)?.afecto_igv === false) && (
+              <span className="ml-1 text-xs text-slate-400">* solo ítems afectos</span>
+            )}
+            :
+          </span>
           <span className="font-semibold">{formatCurrency(tax)}</span>
         </div>
         <div className="flex justify-between text-lg border-t border-slate-200 pt-3">

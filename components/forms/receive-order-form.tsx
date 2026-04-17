@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Package } from 'lucide-react'
 import { toast } from 'sonner'
-import { receivePurchaseOrder } from '@/app/actions'
+import { receivePurchaseOrder, getNextCorrelativo } from '@/app/actions'
 import { localDateString } from '@/utils/helpers/currency'
 
 const SERIES_POR_TIPO: Record<string, string> = {
@@ -53,6 +53,14 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
   )
 
   const [expirationDates, setExpirationDates] = useState<Record<string, string>>({})
+
+  // Pre-llenar número de comprobante con el siguiente correlativo al cambiar tipo
+  useEffect(() => {
+    const serie = SERIES_POR_TIPO[formData.comprobante_tipo] ?? 'F001'
+    getNextCorrelativo(formData.comprobante_tipo, serie).then(next => {
+      setFormData(prev => ({ ...prev, comprobante_numero: next }))
+    })
+  }, [formData.comprobante_tipo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
