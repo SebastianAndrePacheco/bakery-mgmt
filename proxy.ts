@@ -44,13 +44,15 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const path = request.nextUrl.pathname
 
-  // Sin sesión → login
-  if (!user && !path.startsWith('/auth')) {
+  const isGet = request.method === 'GET'
+
+  // Sin sesión → login (solo navegación, no server actions)
+  if (isGet && !user && !path.startsWith('/auth')) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  // Con sesión en /auth → dashboard
-  if (user && path.startsWith('/auth')) {
+  // Con sesión en /auth → dashboard (solo navegación, no server actions)
+  if (isGet && user && path.startsWith('/auth')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

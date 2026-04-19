@@ -137,6 +137,13 @@ export default function LoginPage() {
                 </>
               ) : 'Ingresar al sistema'}
             </button>
+
+            <a
+              href="/auth/recuperar"
+              className="block text-center text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              ¿Olvidaste tu contraseña?
+            </a>
           </form>
 
           <p className="text-center text-xs text-slate-400 mt-8">

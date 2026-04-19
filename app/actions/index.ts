@@ -781,21 +781,59 @@ export async function loginUser(email: string, password: string): Promise<Action
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+  // Registrar intento en login_logs (no bloqueante)
+  supabaseAdmin.from('login_logs').insert({
+    email,
+    ip,
+    success: !error,
+    user_id: data?.user?.id ?? null,
+  }).then(() => {}).catch(() => {})
 
   if (error) {
     if (!entry || now >= entry.resetAt) {
       _loginAttempts.set(ip, { count: 1, resetAt: now + WINDOW_MS })
     } else {
       entry.count++
-      // Al llegar al límite extendemos el bloqueo
       if (entry.count >= MAX_ATTEMPTS) entry.resetAt = now + LOCKOUT_MS
     }
     return { error: 'Correo o contraseña incorrectos' }
   }
 
-  // Éxito: limpiar contador
   _loginAttempts.delete(ip)
+  return { success: true }
+}
+
+// ─── Recuperación de contraseña ──────────────────────────────────────────────
+
+export async function sendPasswordReset(email: string): Promise<ActionResult> {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: 'Correo electrónico inválido' }
+  }
+
+  const hdrs = await headers()
+  const host = hdrs.get('host') ?? 'localhost:3000'
+  const protocol = host.startsWith('localhost') ? 'http' : 'https'
+  const siteUrl = `${protocol}://${host}`
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteUrl}/auth/nueva-clave`,
+  })
+
+  // Nunca revelar si el email existe o no (evitar enumeración)
+  if (error) console.error('[sendPasswordReset]', error.message)
+  return { success: true }
+}
+
+export async function updatePassword(newPassword: string): Promise<ActionResult> {
+  if (newPassword.length < 8) {
+    return { error: 'La contraseña debe tener al menos 8 caracteres' }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) return { error: 'No se pudo actualizar la contraseña. El enlace puede haber expirado.' }
   return { success: true }
 }
 
