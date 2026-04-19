@@ -784,12 +784,12 @@ export async function loginUser(email: string, password: string): Promise<Action
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   // Registrar intento en login_logs (no bloqueante)
-  supabaseAdmin.from('login_logs').insert({
+  void supabaseAdmin.from('login_logs').insert({
     email,
     ip,
     success: !error,
     user_id: data?.user?.id ?? null,
-  }).then(() => {}).catch(() => {})
+  })
 
   if (error) {
     if (!entry || now >= entry.resetAt) {
