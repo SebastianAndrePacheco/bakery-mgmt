@@ -856,17 +856,26 @@ export async function consultarRUC(ruc: string): Promise<{ error: string } | { d
   if (!/^\d{11}$/.test(ruc)) return { error: 'RUC debe tener 11 dígitos' }
 
   try {
-    const token = process.env.APIS_NET_PE_TOKEN
-    const reqHeaders: Record<string, string> = { Accept: 'application/json' }
-    if (token) reqHeaders['Authorization'] = `Bearer ${token}`
+    const token = process.env.DECOLECTA_TOKEN
+    if (!token) return { error: 'Configura DECOLECTA_TOKEN en las variables de entorno.' }
 
-    const res = await fetch(`https://api.apis.net.pe/v2/ruc?numero=${ruc}`, {
+    const reqHeaders: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    }
+
+    const res = await fetch(`https://api.decolecta.com/v1/sunat/ruc/full?numero=${ruc}`, {
       headers: reqHeaders,
       next: { revalidate: 86400 },
     })
 
     if (res.status === 404) return { error: 'RUC no encontrado en SUNAT' }
-    if (!res.ok)            return { error: 'No se pudo consultar SUNAT. Intenta nuevamente.' }
+    if (res.status === 401 || res.status === 403) return { error: 'Token inválido. Verifica DECOLECTA_TOKEN.' }
+    if (res.status === 429) return { error: 'Límite de consultas alcanzado. Intenta en unos minutos.' }
+    if (!res.ok) {
+      console.error('[consultarRUC] HTTP', res.status, await res.text().catch(() => ''))
+      return { error: `No se pudo consultar SUNAT (HTTP ${res.status}).` }
+    }
 
     const raw = await res.json()
 
@@ -882,7 +891,8 @@ export async function consultarRUC(ruc: string): Promise<{ error: string } | { d
       'NO HALLADO': 'No Hallado',
     }
 
-    const nombre = raw.nombre ?? ''
+    // decolecta puede devolver razonSocial o nombre según el endpoint
+    const nombre = raw.razonSocial ?? raw.nombre ?? ''
 
     return {
       data: {
@@ -891,7 +901,7 @@ export async function consultarRUC(ruc: string): Promise<{ error: string } | { d
         tipo_proveedor:   detectTipoProveedor(nombre),
         estado_sunat:     estadoMap[(raw.estado ?? '').toUpperCase()]     ?? raw.estado     ?? '',
         condicion_sunat:  condicionMap[(raw.condicion ?? '').toUpperCase()] ?? raw.condicion ?? '',
-        direccion_fiscal: raw.direccion ?? '',
+        direccion_fiscal: raw.direccion ?? raw.domicilioFiscal ?? '',
       },
     }
   } catch {
