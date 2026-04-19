@@ -864,7 +864,7 @@ export async function consultarRUC(ruc: string): Promise<{ error: string } | { d
       Authorization: `Bearer ${token}`,
     }
 
-    const res = await fetch(`https://api.decolecta.com/v1/sunat/ruc/full?numero=${ruc}`, {
+    const res = await fetch(`https://api.decolecta.com/v1/sunat/ruc?numero=${ruc}`, {
       headers: reqHeaders,
       next: { revalidate: 86400 },
     })
@@ -891,17 +891,16 @@ export async function consultarRUC(ruc: string): Promise<{ error: string } | { d
       'NO HALLADO': 'No Hallado',
     }
 
-    // decolecta puede devolver razonSocial o nombre según el endpoint
-    const nombre = raw.razonSocial ?? raw.nombre ?? ''
+    const nombre = raw.razon_social ?? ''
 
     return {
       data: {
         business_name:    nombre,
-        nombre_comercial: raw.nombreComercial ?? '',
+        nombre_comercial: '',
         tipo_proveedor:   detectTipoProveedor(nombre),
-        estado_sunat:     estadoMap[(raw.estado ?? '').toUpperCase()]     ?? raw.estado     ?? '',
-        condicion_sunat:  condicionMap[(raw.condicion ?? '').toUpperCase()] ?? raw.condicion ?? '',
-        direccion_fiscal: raw.direccion ?? raw.domicilioFiscal ?? '',
+        estado_sunat:     estadoMap[(raw.estado ?? '').toUpperCase()]       ?? raw.estado     ?? '',
+        condicion_sunat:  condicionMap[(raw.condicion ?? '').toUpperCase()] ?? raw.condicion  ?? '',
+        direccion_fiscal: raw.direccion ?? '',
       },
     }
   } catch {
