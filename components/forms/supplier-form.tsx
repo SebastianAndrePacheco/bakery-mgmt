@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Supplier } from '@/utils/types/database.types'
-import { createSupplier, updateSupplier } from '@/app/actions'
+import { createSupplier, updateSupplier, consultarRUC } from '@/app/actions'
 import { toast } from 'sonner'
 import { validarRUC, validarCelular, validarEmail } from '@/utils/validators'
+import { Loader2, Search, CheckCircle, AlertTriangle } from 'lucide-react'
 
 interface SupplierFormProps {
   supplier?: Supplier
@@ -18,8 +19,10 @@ const BANCOS = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'BanBif', 'Mibanco', '
 
 export function SupplierForm({ supplier }: SupplierFormProps) {
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [loading, setLoading]       = useState(false)
+  const [rucLoading, setRucLoading] = useState(false)
+  const [sunatOk, setSunatOk]       = useState<boolean | null>(null)
+  const [errors, setErrors]         = useState<Record<string, string>>({})
   const isEdit = !!supplier
 
   const validate = () => {
@@ -73,7 +76,44 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
 
   const [is_active, setIsActive] = useState(supplier?.is_active ?? true)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleConsultarRUC = async () => {
+    if (empresa.ruc.length !== 11) {
+      toast.error('Ingresa los 11 dígitos del RUC primero')
+      return
+    }
+    setRucLoading(true)
+    setSunatOk(null)
+    const result = await consultarRUC(empresa.ruc)
+    setRucLoading(false)
+
+    if ('error' in result) {
+      toast.error(result.error)
+      setSunatOk(false)
+      return
+    }
+
+    const d = result.data
+    setEmpresa(prev => ({
+      ...prev,
+      business_name:    d.business_name    || prev.business_name,
+      nombre_comercial: d.nombre_comercial || prev.nombre_comercial,
+      tipo_proveedor:   d.tipo_proveedor   || prev.tipo_proveedor,
+      estado_sunat:     d.estado_sunat     || prev.estado_sunat,
+      condicion_sunat:  d.condicion_sunat  || prev.condicion_sunat,
+      direccion_fiscal: d.direccion_fiscal || prev.direccion_fiscal,
+    }))
+
+    const esValido = d.estado_sunat === 'Activo' && d.condicion_sunat === 'Habido'
+    setSunatOk(esValido)
+
+    if (!esValido) {
+      toast.warning(`Proveedor ${d.estado_sunat || '?'} · ${d.condicion_sunat || '?'} — verifica antes de registrar`)
+    } else {
+      toast.success('Datos de SUNAT cargados correctamente')
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!validate()) return
     setLoading(true)
@@ -143,13 +183,38 @@ export function SupplierForm({ supplier }: SupplierFormProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <label className={labelCls}>RUC <span className="text-slate-400 text-xs">(11 dígitos)</span></label>
-            <input
-              type="text" maxLength={11} value={empresa.ruc}
-              onChange={(e) => setEmpresa({ ...empresa, ruc: e.target.value.replace(/\D/g, '') })}
-              placeholder="20123456789"
-              className={inputCls + (errors.ruc ? ' border-red-400' : '')}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text" maxLength={11} value={empresa.ruc}
+                onChange={(e) => { setEmpresa({ ...empresa, ruc: e.target.value.replace(/\D/g, '') }); setSunatOk(null) }}
+                placeholder="20123456789"
+                className={inputCls + (errors.ruc ? ' border-red-400' : '')}
+              />
+              <button
+                type="button"
+                onClick={handleConsultarRUC}
+                disabled={rucLoading || empresa.ruc.length !== 11}
+                className="shrink-0 px-3 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 border border-input rounded-md text-sm flex items-center gap-1.5 transition-colors"
+              >
+                {rucLoading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Search className="w-4 h-4" />}
+                SUNAT
+              </button>
+            </div>
             {errors.ruc && <p className="text-xs text-red-600">{errors.ruc}</p>}
+            {sunatOk === true && (
+              <div className="flex items-center gap-1.5 text-xs text-green-700">
+                <CheckCircle className="w-3.5 h-3.5" />
+                Activo · Habido — datos cargados
+              </div>
+            )}
+            {sunatOk === false && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-700">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Verifica el estado del proveedor antes de registrar
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>Tipo de proveedor</label>

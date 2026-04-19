@@ -831,6 +831,75 @@ export async function unenrollMFA(factorId: string): Promise<ActionResult> {
   return { success: true }
 }
 
+// ─── Consulta RUC SUNAT (apis.net.pe) ────────────────────────────────────────
+
+export type SunatRUCData = {
+  business_name:    string
+  nombre_comercial: string
+  tipo_proveedor:   string
+  estado_sunat:     string
+  condicion_sunat:  string
+  direccion_fiscal: string
+}
+
+function detectTipoProveedor(nombre: string): string {
+  const u = nombre.toUpperCase()
+  if (u.includes('E.I.R.L')) return 'EIRL'
+  if (u.includes('S.A.C'))   return 'SAC'
+  if (u.includes('S.R.L'))   return 'SRL'
+  if (/S\.A\.A\.?/.test(u))  return 'SAA'
+  if (/\bS\.A\.?\b/.test(u)) return 'SA'
+  return ''
+}
+
+export async function consultarRUC(ruc: string): Promise<{ error: string } | { data: SunatRUCData }> {
+  if (!/^\d{11}$/.test(ruc)) return { error: 'RUC debe tener 11 dígitos' }
+
+  try {
+    const token = process.env.APIS_NET_PE_TOKEN
+    const reqHeaders: Record<string, string> = { Accept: 'application/json' }
+    if (token) reqHeaders['Authorization'] = `Bearer ${token}`
+
+    const res = await fetch(`https://api.apis.net.pe/v2/ruc?numero=${ruc}`, {
+      headers: reqHeaders,
+      next: { revalidate: 86400 },
+    })
+
+    if (res.status === 404) return { error: 'RUC no encontrado en SUNAT' }
+    if (!res.ok)            return { error: 'No se pudo consultar SUNAT. Intenta nuevamente.' }
+
+    const raw = await res.json()
+
+    const estadoMap: Record<string, string> = {
+      'ACTIVO':               'Activo',
+      'BAJA PROVISIONAL':     'Baja Provisional',
+      'BAJA DEFINITIVA':      'Baja Definitiva',
+      'SUSPENSIÓN TEMPORAL':  'Suspensión Temporal',
+    }
+    const condicionMap: Record<string, string> = {
+      'HABIDO':     'Habido',
+      'NO HABIDO':  'No Habido',
+      'NO HALLADO': 'No Hallado',
+    }
+
+    const nombre = raw.nombre ?? ''
+
+    return {
+      data: {
+        business_name:    nombre,
+        nombre_comercial: raw.nombreComercial ?? '',
+        tipo_proveedor:   detectTipoProveedor(nombre),
+        estado_sunat:     estadoMap[(raw.estado ?? '').toUpperCase()]     ?? raw.estado     ?? '',
+        condicion_sunat:  condicionMap[(raw.condicion ?? '').toUpperCase()] ?? raw.condicion ?? '',
+        direccion_fiscal: raw.direccion ?? '',
+      },
+    }
+  } catch {
+    return { error: 'Error de conexión. Verifica tu internet.' }
+  }
+}
+
+
 // ─── Recuperación de contraseña ──────────────────────────────────────────────
 
 export async function sendPasswordReset(email: string): Promise<ActionResult> {
