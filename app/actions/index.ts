@@ -819,7 +819,7 @@ export async function sendPasswordReset(email: string): Promise<ActionResult> {
 
   const supabase = await createClient()
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/auth/nueva-clave`,
+    redirectTo: `${siteUrl}/auth/callback?next=/auth/nueva-clave`,
   })
 
   // Nunca revelar si el email existe o no (evitar enumeración)

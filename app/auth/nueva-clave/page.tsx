@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { updatePassword } from '@/app/actions'
 import { AlertCircle, CheckCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 
@@ -11,29 +10,10 @@ function NuevaClaveForm() {
   const [confirm, setConfirm]           = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading]           = useState(false)
-  const [exchanging, setExchanging]     = useState(true)
   const [error, setError]               = useState('')
   const [success, setSuccess]           = useState(false)
 
-  const router       = useRouter()
-  const searchParams = useSearchParams()
-
-  useEffect(() => {
-    const code = searchParams.get('code')
-    if (!code) {
-      setError('Enlace inválido o expirado. Solicita uno nuevo.')
-      setExchanging(false)
-      return
-    }
-
-    const supabase = createClient()
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) {
-        setError('El enlace ha expirado o ya fue usado. Solicita uno nuevo.')
-      }
-      setExchanging(false)
-    })
-  }, [searchParams])
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,24 +67,6 @@ function NuevaClaveForm() {
                 Tu contraseña fue cambiada exitosamente. Serás redirigido al inicio de sesión.
               </p>
             </div>
-          </div>
-        ) : exchanging ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-slate-500">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-sm">Verificando enlace...</span>
-          </div>
-        ) : error && !password ? (
-          <div className="space-y-4">
-            <div className="flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              {error}
-            </div>
-            <a
-              href="/auth/recuperar"
-              className="block text-center text-sm text-amber-600 hover:text-amber-700 font-medium transition-colors"
-            >
-              Solicitar nuevo enlace
-            </a>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -183,13 +145,5 @@ function NuevaClaveForm() {
 }
 
 export default function NuevaClavePage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-      </div>
-    }>
-      <NuevaClaveForm />
-    </Suspense>
-  )
+  return <NuevaClaveForm />
 }
