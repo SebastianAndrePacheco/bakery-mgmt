@@ -51,8 +51,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  // Con sesión en /auth → dashboard (solo navegación, no server actions)
-  if (isGet && user && path.startsWith('/auth')) {
+  // Con sesión en /auth → dashboard (excepto nueva-clave que necesita sesión activa)
+  if (isGet && user && path.startsWith('/auth') && path !== '/auth/nueva-clave') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
