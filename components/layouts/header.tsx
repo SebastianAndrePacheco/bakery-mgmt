@@ -201,7 +201,7 @@ export function Header() {
               {ROLE_LABELS[userRole] || userRole || '—'}
             </p>
           </div>
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/perfil')}>
             <User className="w-5 h-5" />
           </Button>
         </div>

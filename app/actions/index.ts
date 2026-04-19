@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 
 export type ActionResult = { error: string } | { success: true }
+export type LoginResult = ActionResult | { requiresMfa: true; factorId: string; challengeId: string }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -769,7 +770,7 @@ const MAX_ATTEMPTS = 5
 const WINDOW_MS  = 5  * 60 * 1000  // ventana de 5 min
 const LOCKOUT_MS = 15 * 60 * 1000  // bloqueo de 15 min tras agotar intentos
 
-export async function loginUser(email: string, password: string): Promise<ActionResult> {
+export async function loginUser(email: string, password: string): Promise<LoginResult> {
   const hdrs = await headers()
   const ip = hdrs.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
   const now = Date.now()
@@ -801,7 +802,32 @@ export async function loginUser(email: string, password: string): Promise<Action
     return { error: 'Correo o contraseña incorrectos' }
   }
 
+  // Verificar si requiere MFA
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (aal && aal.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
+    const { data: factors } = await supabase.auth.mfa.listFactors()
+    const totp = factors?.totp?.[0]
+    if (totp) {
+      const { data: challenge } = await supabase.auth.mfa.challenge({ factorId: totp.id })
+      if (challenge) return { requiresMfa: true, factorId: totp.id, challengeId: challenge.id }
+    }
+  }
+
   _loginAttempts.delete(ip)
+  return { success: true }
+}
+
+export async function verifyMFALogin(factorId: string, challengeId: string, code: string): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { error } = await supabase.auth.mfa.verify({ factorId, challengeId, code })
+  if (error) return { error: 'Código incorrecto. Intenta de nuevo.' }
+  return { success: true }
+}
+
+export async function unenrollMFA(factorId: string): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { error } = await supabase.auth.mfa.unenroll({ factorId })
+  if (error) return { error: 'No se pudo desactivar el 2FA.' }
   return { success: true }
 }
 

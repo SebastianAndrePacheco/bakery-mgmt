@@ -15,7 +15,7 @@ function NuevaClaveForm() {
 
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (password !== confirm) {
       setError('Las contraseñas no coinciden.')
