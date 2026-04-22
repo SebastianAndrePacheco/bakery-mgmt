@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Category, Unit, Supply } from '@/utils/types/database.types'
+import { Category, Unit, Supply, TIPO_INSUMO_OPTIONS } from '@/utils/types/database.types'
 import { updateSupply } from '@/app/actions'
 
 interface SupplyEditFormProps {
@@ -21,6 +21,7 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
     name: supply.name,
     category_id: supply.category_id,
     unit_id: supply.unit_id,
+    tipo_insumo: supply.tipo_insumo,
     min_stock: supply.min_stock,
     storage_conditions: supply.storage_conditions || '',
     tasa_igv: supply.tasa_igv,
@@ -72,6 +73,26 @@ export function SupplyEditForm({ supply, categories, units }: SupplyEditFormProp
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="tipo_insumo" className="text-sm font-medium">
+            Tipo de insumo <span className="text-destructive">*</span>
+          </label>
+          <select
+            id="tipo_insumo"
+            required
+            value={formData.tipo_insumo}
+            onChange={(e) => setFormData({ ...formData, tipo_insumo: e.target.value as Supply['tipo_insumo'] })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Seleccionar tipo</option>
+            {TIPO_INSUMO_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-2">

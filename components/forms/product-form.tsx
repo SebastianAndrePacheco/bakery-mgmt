@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Category, Unit } from '@/utils/types/database.types'
+import { Category, Unit, TIPO_PRODUCTO_OPTIONS } from '@/utils/types/database.types'
 import { Save } from 'lucide-react'
 import { createProduct } from '@/app/actions'
 
@@ -23,6 +23,7 @@ export function ProductForm({ categories, units, nextCode = 'PRD-001' }: Product
     name: '',
     category_id: '',
     unit_id: '',
+    tipo_producto: '',
     shelf_life_days: 1,
     selling_price: '',
     is_active: true,
@@ -77,6 +78,24 @@ export function ProductForm({ categories, units, nextCode = 'PRD-001' }: Product
             placeholder="Pan Francés"
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
+        </div>
+
+        {/* Tipo de producto */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Tipo de producto <span className="text-red-600">*</span>
+          </label>
+          <select
+            required
+            value={formData.tipo_producto}
+            onChange={(e) => setFormData({ ...formData, tipo_producto: e.target.value })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Seleccionar tipo</option>
+            {TIPO_PRODUCTO_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Categoría */}

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Product, Category, Unit } from '@/utils/types/database.types'
+import { Product, Category, Unit, TIPO_PRODUCTO_OPTIONS } from '@/utils/types/database.types'
 import { Save } from 'lucide-react'
 import { updateProduct } from '@/app/actions'
 
@@ -23,6 +23,7 @@ export function ProductEditForm({ product, categories, units }: ProductEditFormP
     name: product.name,
     category_id: product.category_id,
     unit_id: product.unit_id,
+    tipo_producto: product.tipo_producto,
     shelf_life_days: product.shelf_life_days,
     selling_price: product.selling_price?.toString() || '',
     is_active: product.is_active,
@@ -78,6 +79,24 @@ export function ProductEditForm({ product, categories, units }: ProductEditFormP
             placeholder="Pan Francés"
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
+        </div>
+
+        {/* Tipo de producto */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Tipo de producto <span className="text-red-600">*</span>
+          </label>
+          <select
+            required
+            value={formData.tipo_producto}
+            onChange={(e) => setFormData({ ...formData, tipo_producto: e.target.value as Product['tipo_producto'] })}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Seleccionar tipo</option>
+            {TIPO_PRODUCTO_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Categoría */}
