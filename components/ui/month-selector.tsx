@@ -5,14 +5,18 @@ interface MonthOption {
   label: string
 }
 
-interface MonthSelectorProps {
+export interface MonthSelectorProps {
   options: MonthOption[]
   current: string
+  extraParam?: Record<string, string>
 }
 
-export function MonthSelector({ options, current }: MonthSelectorProps) {
+export function MonthSelector({ options, current, extraParam }: MonthSelectorProps) {
   return (
     <form method="GET">
+      {extraParam && Object.entries(extraParam).map(([k, v]) => (
+        <input key={k} type="hidden" name={k} value={v} />
+      ))}
       <select
         name="mes"
         value={current}

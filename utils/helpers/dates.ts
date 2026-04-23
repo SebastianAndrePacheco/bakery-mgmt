@@ -1,3 +1,18 @@
+const LIMA_TZ = 'America/Lima'
+
+/**
+ * Fecha + hora en zona horaria Lima (UTC-5), formato DD/MM/YYYY HH:MM:SS
+ */
+export function formatDateTime(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  return d.toLocaleString('es-PE', {
+    timeZone: LIMA_TZ,
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  })
+}
+
 /**
  * Formatea una fecha en formato DD/MM/YYYY
  */
