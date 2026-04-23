@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, Package, DollarSign, ShoppingCart, Trash2, AlertTriangle } from 'lucide-react'
+import { TrendingUp, Package, DollarSign, ShoppingCart, Trash2, AlertTriangle, Award } from 'lucide-react'
 import { formatCurrency } from '@/utils/helpers/currency'
 import Link from 'next/link'
 
@@ -134,6 +134,14 @@ export default async function ReportsPage() {
       title: 'Control de Vencimientos',
       desc: 'Lotes próximos a vencer en los próximos 30 días',
       badge: criticalBatches > 0 ? criticalBatches : undefined,
+    },
+    {
+      href: '/reportes/proveedores-categoria',
+      icon: Award,
+      color: 'text-rose-600',
+      bg: 'bg-rose-50',
+      title: 'Proveedores por Categoría',
+      desc: 'Quién vende más barato y a quién se compra más por tipo de insumo',
     },
     {
       href: '/reportes/proyeccion-inventario',

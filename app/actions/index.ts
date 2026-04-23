@@ -112,37 +112,22 @@ const SupplierSchema = z.object({
   is_active:        z.boolean().default(true),
 })
 
-const TIPOS_INSUMO = [
-  'harina_almidon', 'lacteo', 'huevo', 'grasa_aceite', 'azucar_endulzante',
-  'levadura_fermento', 'sal_condimento', 'aditivo_mejorador', 'relleno_cobertura',
-  'fruta_semilla_fruto_seco', 'colorante_saborizante', 'agua_liquido',
-  'envase_empaque', 'limpieza_higiene', 'combustible', 'otro',
-] as const
-
 const SupplySchema = z.object({
   code: z.string().min(1, 'Código requerido').max(20).trim().toUpperCase(),
   name: z.string().min(1, 'Nombre requerido').max(200).trim(),
   category_id: uuid,
   unit_id: uuid,
-  tipo_insumo: z.enum(TIPOS_INSUMO, { error: 'Tipo de insumo requerido' }),
   min_stock: z.number().min(0, 'Stock mínimo no puede ser negativo'),
   storage_conditions: z.string().max(500).optional().or(z.literal('')),
   tasa_igv: z.number().min(0).max(100).default(18),
   is_active: z.boolean().default(true),
 })
 
-const TIPOS_PRODUCTO = [
-  'pan_sal', 'pan_dulce', 'pan_integral', 'torta_pastel', 'bizcocho_queque',
-  'galleta', 'empanada_salado', 'hojaldre', 'dona_berlin', 'paneton',
-  'postre', 'otro',
-] as const
-
 const ProductSchema = z.object({
   code: z.string().min(1, 'Código requerido').max(20).trim().toUpperCase(),
   name: z.string().min(1, 'Nombre requerido').max(200).trim(),
   category_id: uuid,
   unit_id: uuid,
-  tipo_producto: z.enum(TIPOS_PRODUCTO, { error: 'Tipo de producto requerido' }),
   shelf_life_days: z.number().int().min(1, 'Vida útil debe ser al menos 1 día'),
   selling_price: z.number().min(0, 'Precio no puede ser negativo').nullable().optional(),
   is_active: z.boolean().default(true),

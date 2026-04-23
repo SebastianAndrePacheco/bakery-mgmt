@@ -6,72 +6,6 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type TipoInsumo =
-  | 'harina_almidon'
-  | 'lacteo'
-  | 'huevo'
-  | 'grasa_aceite'
-  | 'azucar_endulzante'
-  | 'levadura_fermento'
-  | 'sal_condimento'
-  | 'aditivo_mejorador'
-  | 'relleno_cobertura'
-  | 'fruta_semilla_fruto_seco'
-  | 'colorante_saborizante'
-  | 'agua_liquido'
-  | 'envase_empaque'
-  | 'limpieza_higiene'
-  | 'combustible'
-  | 'otro'
-
-export type TipoProducto =
-  | 'pan_sal'
-  | 'pan_dulce'
-  | 'pan_integral'
-  | 'torta_pastel'
-  | 'bizcocho_queque'
-  | 'galleta'
-  | 'empanada_salado'
-  | 'hojaldre'
-  | 'dona_berlin'
-  | 'paneton'
-  | 'postre'
-  | 'otro'
-
-export const TIPO_PRODUCTO_OPTIONS: { value: TipoProducto; label: string; color: string }[] = [
-  { value: 'pan_sal',         label: 'Pan de sal',                  color: 'bg-amber-100 text-amber-800' },
-  { value: 'pan_dulce',       label: 'Pan dulce',                   color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'pan_integral',    label: 'Pan integral y cereales',     color: 'bg-lime-100 text-lime-800' },
-  { value: 'torta_pastel',    label: 'Tortas y pasteles',           color: 'bg-pink-100 text-pink-800' },
-  { value: 'bizcocho_queque', label: 'Bizcochos y queques',         color: 'bg-orange-100 text-orange-800' },
-  { value: 'galleta',         label: 'Galletas',                    color: 'bg-rose-100 text-rose-800' },
-  { value: 'empanada_salado', label: 'Empanadas y salados',         color: 'bg-teal-100 text-teal-800' },
-  { value: 'hojaldre',        label: 'Hojaldres y croissants',      color: 'bg-sky-100 text-sky-800' },
-  { value: 'dona_berlin',     label: 'Donas y berlines',            color: 'bg-violet-100 text-violet-800' },
-  { value: 'paneton',         label: 'Panetón',                     color: 'bg-red-100 text-red-800' },
-  { value: 'postre',          label: 'Postres y dulces',            color: 'bg-fuchsia-100 text-fuchsia-800' },
-  { value: 'otro',            label: 'Otro',                        color: 'bg-slate-100 text-slate-600' },
-]
-
-export const TIPO_INSUMO_OPTIONS: { value: TipoInsumo; label: string; color: string }[] = [
-  { value: 'harina_almidon',           label: 'Harinas y almidones',          color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'lacteo',                   label: 'Lácteos',                       color: 'bg-sky-100 text-sky-800' },
-  { value: 'huevo',                    label: 'Huevos y derivados',            color: 'bg-orange-100 text-orange-800' },
-  { value: 'grasa_aceite',             label: 'Grasas y aceites',             color: 'bg-amber-100 text-amber-800' },
-  { value: 'azucar_endulzante',        label: 'Azúcares y endulzantes',       color: 'bg-pink-100 text-pink-800' },
-  { value: 'levadura_fermento',        label: 'Levaduras y fermentos',        color: 'bg-lime-100 text-lime-800' },
-  { value: 'sal_condimento',           label: 'Sal y condimentos',            color: 'bg-slate-100 text-slate-700' },
-  { value: 'aditivo_mejorador',        label: 'Aditivos y mejoradores',       color: 'bg-violet-100 text-violet-800' },
-  { value: 'relleno_cobertura',        label: 'Rellenos y coberturas',        color: 'bg-rose-100 text-rose-800' },
-  { value: 'fruta_semilla_fruto_seco', label: 'Frutas, semillas y frutos secos', color: 'bg-green-100 text-green-800' },
-  { value: 'colorante_saborizante',    label: 'Colorantes y saborizantes',    color: 'bg-fuchsia-100 text-fuchsia-800' },
-  { value: 'agua_liquido',             label: 'Agua y líquidos',              color: 'bg-cyan-100 text-cyan-800' },
-  { value: 'envase_empaque',           label: 'Envases y empaques',           color: 'bg-teal-100 text-teal-800' },
-  { value: 'limpieza_higiene',         label: 'Limpieza e higiene',           color: 'bg-indigo-100 text-indigo-800' },
-  { value: 'combustible',              label: 'Combustibles',                 color: 'bg-red-100 text-red-800' },
-  { value: 'otro',                     label: 'Otro',                         color: 'bg-slate-100 text-slate-600' },
-]
-
 export type MovementType = 'entrada' | 'salida' | 'ajuste'
 export type MovementReason = 
   | 'compra' 
@@ -216,7 +150,6 @@ export interface Supply {
   name: string
   category_id: string
   unit_id: string
-  tipo_insumo: TipoInsumo
   min_stock: number
   storage_conditions?: string
   tasa_igv: number
@@ -256,7 +189,6 @@ export interface Product {
   name: string
   category_id: string
   unit_id: string
-  tipo_producto: TipoProducto
   shelf_life_days: number
   selling_price?: number
   is_active: boolean

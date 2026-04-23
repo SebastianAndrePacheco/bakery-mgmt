@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Category, Unit, TIPO_INSUMO_OPTIONS } from '@/utils/types/database.types'
+import { Category, Unit } from '@/utils/types/database.types'
 import { createSupply } from '@/app/actions'
 import { toast } from 'sonner'
 
@@ -21,7 +21,6 @@ export function SupplyForm({ categories, units, nextCode = 'INS-001' }: SupplyFo
     name: '',
     category_id: '',
     unit_id: '',
-    tipo_insumo: '',
     min_stock: '',
     storage_conditions: '',
     tasa_igv: 18,
@@ -85,21 +84,6 @@ export function SupplyForm({ categories, units, nextCode = 'INS-001' }: SupplyFo
             placeholder="Harina de trigo"
             className={inputCls}
           />
-        </div>
-
-        {/* Tipo de insumo */}
-        <div className="space-y-1.5">
-          <label className={labelCls}>Tipo de insumo <span className="text-red-500">*</span></label>
-          <select
-            required value={formData.tipo_insumo}
-            onChange={(e) => setFormData({ ...formData, tipo_insumo: e.target.value })}
-            className={inputCls}
-          >
-            <option value="">Seleccionar tipo</option>
-            {TIPO_INSUMO_OPTIONS.map(t => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
         </div>
 
         {/* Categoría */}

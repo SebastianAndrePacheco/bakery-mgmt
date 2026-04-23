@@ -1,6 +1,6 @@
 'use client'
 
-import { Product, Category, Unit, TIPO_PRODUCTO_OPTIONS } from '@/utils/types/database.types'
+import { Product, Category, Unit } from '@/utils/types/database.types'
 import { Edit, Trash2, ShoppingBag, ChefHat } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -52,17 +52,7 @@ export function ProductsTable({ products }: ProductsTableProps) {
               <td className="py-4 px-4">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-slate-400" />
-                  <div>
-                    <div className="font-medium text-slate-900">{product.name}</div>
-                    {(() => {
-                      const tipo = TIPO_PRODUCTO_OPTIONS.find(t => t.value === product.tipo_producto)
-                      return tipo ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-0.5 ${tipo.color}`}>
-                          {tipo.label}
-                        </span>
-                      ) : null
-                    })()}
-                  </div>
+                  <div className="font-medium text-slate-900">{product.name}</div>
                 </div>
               </td>
               <td className="py-4 px-4">

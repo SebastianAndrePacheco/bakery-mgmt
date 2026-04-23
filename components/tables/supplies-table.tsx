@@ -1,6 +1,6 @@
 'use client'
 
-import { Supply, Category, Unit, TIPO_INSUMO_OPTIONS } from '@/utils/types/database.types'
+import { Supply, Category, Unit } from '@/utils/types/database.types'
 import { Edit, Trash2, Package, AlertCircle, TrendingUp, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -79,14 +79,6 @@ export function SuppliesTable({ supplies }: SuppliesTableProps) {
                       <div className="font-medium text-slate-900">
                         {supply.name}
                       </div>
-                      {(() => {
-                        const tipo = TIPO_INSUMO_OPTIONS.find(t => t.value === supply.tipo_insumo)
-                        return tipo ? (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-0.5 ${tipo.color}`}>
-                            {tipo.label}
-                          </span>
-                        ) : null
-                      })()}
                       {supply.storage_conditions && (
                         <div className="text-xs text-slate-500 mt-0.5">
                           {supply.storage_conditions}
