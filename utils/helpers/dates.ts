@@ -1,16 +1,23 @@
-const LIMA_TZ = 'America/Lima'
+// Peru es UTC-5 fijo, sin horario de verano
+const LIMA_OFFSET_MS = 5 * 60 * 60 * 1000
+
+function toLimaDate(date: string | Date): Date {
+  const utc = typeof date === 'string' ? new Date(date) : date
+  return new Date(utc.getTime() - LIMA_OFFSET_MS)
+}
 
 /**
  * Fecha + hora en zona horaria Lima (UTC-5), formato DD/MM/YYYY HH:MM:SS
  */
 export function formatDateTime(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleString('es-PE', {
-    timeZone: LIMA_TZ,
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false,
-  })
+  const lima = toLimaDate(date)
+  const d  = String(lima.getUTCDate()).padStart(2, '0')
+  const m  = String(lima.getUTCMonth() + 1).padStart(2, '0')
+  const y  = lima.getUTCFullYear()
+  const h  = String(lima.getUTCHours()).padStart(2, '0')
+  const mi = String(lima.getUTCMinutes()).padStart(2, '0')
+  const s  = String(lima.getUTCSeconds()).padStart(2, '0')
+  return `${d}/${m}/${y} ${h}:${mi}:${s}`
 }
 
 /**
