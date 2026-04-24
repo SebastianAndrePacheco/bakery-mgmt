@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updatePassword } from '@/app/actions'
+import { createClient } from '@/utils/supabase/client'
 import { AlertCircle, CheckCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 
 function NuevaClaveForm() {
@@ -29,11 +29,15 @@ function NuevaClaveForm() {
     setLoading(true)
     setError('')
 
-    const result = await updatePassword(password)
+    // Usar el cliente de navegador directamente para que la sesión de
+    // recuperación se consuma sin pasar por el proxy del servidor.
+    const supabase = createClient()
+    const { error: supabaseError } = await supabase.auth.updateUser({ password })
+
     setLoading(false)
 
-    if ('error' in result) {
-      setError(result.error)
+    if (supabaseError) {
+      setError('No se pudo actualizar la contraseña. Solicita un nuevo enlace de recuperación.')
       return
     }
 
