@@ -554,9 +554,8 @@ export async function createProductionOrder(data: unknown): Promise<ActionResult
   const parsed = ProductionOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user, role } = await getUserWithRole()
+  const { supabase, user } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
-  if (!['admin', 'panadero'].includes(role ?? '')) return { error: 'Se requiere rol administrador o panadero' }
 
   const orderNumber = `PROD-${Date.now()}`
   const { notes, ...rest } = parsed.data
@@ -581,9 +580,8 @@ export async function createPurchaseOrder(data: unknown): Promise<ActionResult> 
   const parsed = CreatePurchaseOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user, role } = await getUserWithRole()
+  const { supabase, user } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
-  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const limited = checkRateLimit(`createPurchaseOrder:${user.id}`, 10, 60_000)
   if (limited) return limited
@@ -618,11 +616,8 @@ export async function receivePurchaseOrder(data: unknown): Promise<ActionResult>
   const parsed = ReceiveOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user, role } = await getUserWithRole()
+  const { supabase, user } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
-  if (!['admin', 'panadero'].includes(role ?? '')) {
-    return { error: 'Se requiere rol administrador o panadero' }
-  }
 
   const limited = checkRateLimit(`receivePurchaseOrder:${user.id}`, 10, 60_000)
   if (limited) return limited
@@ -738,11 +733,8 @@ export async function completeProductionOrder(
   const parsed = CompleteProductionSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error) as { error: string }
 
-  const { supabase, user, role } = await getUserWithRole()
+  const { supabase, user } = await getUserWithRole()
   if (!user) return { error: 'No autorizado' }
-  if (!['admin', 'panadero'].includes(role ?? '')) {
-    return { error: 'Se requiere rol administrador o panadero' }
-  }
 
   const limited = checkRateLimit(`completeProductionOrder:${user.id}`, 10, 60_000)
   if (limited) return limited as { error: string }
