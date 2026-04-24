@@ -936,8 +936,15 @@ export async function updatePassword(newPassword: string): Promise<ActionResult>
     return { error: 'La contraseña debe tener al menos 8 caracteres' }
   }
   const supabase = await createClient()
-  const { error } = await supabase.auth.updateUser({ password: newPassword })
-  if (error) return { error: 'No se pudo actualizar la contraseña. El enlace puede haber expirado.' }
+  // La sesión de recuperación tiene AAL1; getUser() funciona pero updateUser()
+  // requiere AAL2 cuando MFA está activo. Usamos admin para saltear esa restricción.
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Sesión no válida. Solicita un nuevo enlace de recuperación.' }
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, { password: newPassword })
+  if (error) return { error: 'No se pudo actualizar la contraseña.' }
+
+  await supabase.auth.signOut()
   return { success: true }
 }
 
