@@ -21,8 +21,8 @@ interface PurchaseOrderFormProps {
 interface OrderItem {
   supply_id: string
   quantity: number
-  unit_price: number  // Precio NETO sin IGV (valor de venta)
-  total: number       // Subtotal neto sin IGV (qty × unit_price)
+  unit_price: number  // Derivado: total / quantity (precio por unidad de medida)
+  total: number       // Lo que ingresa el usuario: precio del ítem sin IGV
 }
 
 export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProps) {
@@ -48,15 +48,15 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     }
   }
 
-  const updateItem = (index: number, field: keyof OrderItem, value: number | string) => {
+  const updateItem = (index: number, field: 'supply_id' | 'quantity' | 'total', value: number | string) => {
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: value }
-    
-    // total = subtotal neto del ítem (sin IGV)
-    if (field === 'quantity' || field === 'unit_price') {
-      newItems[index].total = multiplyQtyPrice(newItems[index].quantity, newItems[index].unit_price)
-    }
-    
+
+    // unit_price se deriva de total / quantity (no al revés)
+    const qty   = newItems[index].quantity
+    const total = newItems[index].total
+    newItems[index].unit_price = qty > 0 ? Math.round((total / qty) * 1_000_000) / 1_000_000 : 0
+
     setItems(newItems)
   }
 
@@ -232,7 +232,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
 
               <div className="col-span-2 space-y-2">
                 <label className="text-xs font-medium text-slate-600">
-                  Precio Unit. (sin IGV)
+                  Precio ítem (sin IGV)
                   {(() => {
                     const tasa = supplies.find(s => s.id === item.supply_id)?.tasa_igv
                     if (tasa === undefined || !item.supply_id) return null
@@ -243,10 +243,15 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
                   type="number"
                   step="any"
                   min="0"
-                  value={item.unit_price || ''}
-                  onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                  value={item.total || ''}
+                  onChange={(e) => updateItem(index, 'total', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                 />
+                {item.quantity > 0 && item.total > 0 && item.supply_id && (
+                  <p className="text-xs text-slate-400">
+                    = {formatCurrency(item.unit_price)} / {supplies.find(s => s.id === item.supply_id)?.unit?.symbol ?? 'u'}
+                  </p>
+                )}
               </div>
 
               <div className="col-span-2 space-y-2">
