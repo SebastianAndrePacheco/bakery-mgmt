@@ -1,26 +1,38 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Rutas exclusivas de admin (bloquean a cualquier no-admin, independiente del cargo)
+// Rutas exclusivas de admin (nunca configurables por cargo)
 const ADMIN_ONLY_ROUTES = [
-  '/compras/proveedores',
-  '/compras/ordenes/nueva',
-  '/produccion/productos',
   '/empleados',
   '/usuarios',
   '/configuracion',
   '/auditoria',
 ]
 
-// Módulo que corresponde a cada prefijo de ruta protegida (para verificar cargo_permisos)
+// Ruta → sub-módulo requerido. El orden importa: más específico primero.
 const ROUTE_MODULE: { prefix: string; modulo: string }[] = [
-  { prefix: '/compras',            modulo: 'compras'    },
-  { prefix: '/inventario/insumos', modulo: 'inventario' },
-  { prefix: '/inventario/kardex',  modulo: 'inventario' },
-  { prefix: '/inventario/ajustes', modulo: 'inventario' },
-  { prefix: '/inventario',         modulo: 'inventario' },
-  { prefix: '/produccion',         modulo: 'produccion' },
-  { prefix: '/reportes',           modulo: 'reportes'   },
+  { prefix: '/compras/proveedores',             modulo: 'compras.proveedores' },
+  { prefix: '/compras/ordenes/nueva',           modulo: 'compras.ordenes.crear' },
+  { prefix: '/compras/ordenes',                 modulo: 'compras.ordenes' },
+  { prefix: '/compras',                         modulo: 'compras' },
+  { prefix: '/inventario/insumos',              modulo: 'inventario.insumos' },
+  { prefix: '/inventario/ajustes',              modulo: 'inventario.ajustes' },
+  { prefix: '/inventario/kardex',               modulo: 'inventario.kardex' },
+  { prefix: '/inventario/productos-terminados', modulo: 'inventario.terminados' },
+  { prefix: '/inventario',                      modulo: 'inventario' },
+  { prefix: '/produccion/productos',            modulo: 'produccion.productos' },
+  { prefix: '/produccion/ordenes/nueva',        modulo: 'produccion.ordenes.crear' },
+  { prefix: '/produccion/ordenes',              modulo: 'produccion.ordenes' },
+  { prefix: '/produccion',                      modulo: 'produccion' },
+  { prefix: '/reportes/compras-proveedor',      modulo: 'reportes.compras' },
+  { prefix: '/reportes/proveedores-categoria',  modulo: 'reportes.compras' },
+  { prefix: '/reportes/consumo-insumos',        modulo: 'reportes.inventario' },
+  { prefix: '/reportes/inventario-valorizado',  modulo: 'reportes.inventario' },
+  { prefix: '/reportes/mermas',                 modulo: 'reportes.inventario' },
+  { prefix: '/reportes/vencimientos',           modulo: 'reportes.inventario' },
+  { prefix: '/reportes/proyeccion-inventario',  modulo: 'reportes.inventario' },
+  { prefix: '/reportes/costos-produccion',      modulo: 'reportes.produccion' },
+  { prefix: '/reportes',                        modulo: 'reportes' },
 ]
 
 function matchesRoute(path: string, routes: string[]) {
@@ -30,6 +42,12 @@ function matchesRoute(path: string, routes: string[]) {
 function getModuloForPath(path: string): string | null {
   const match = ROUTE_MODULE.find(m => path === m.prefix || path.startsWith(m.prefix + '/'))
   return match?.modulo ?? null
+}
+
+// A more-specific permission implies its parents:
+// 'compras.ordenes.crear' → satisfies 'compras.ordenes' and 'compras'
+function hasPermiso(permisos: string[], key: string): boolean {
+  return permisos.includes(key) || permisos.some(p => p.startsWith(key + '.'))
 }
 
 export async function proxy(request: NextRequest) {
@@ -85,12 +103,12 @@ export async function proxy(request: NextRequest) {
   // Admin tiene acceso total
   if (role === 'admin') return response
 
-  // Rutas exclusivas de admin: bloquear siempre para no-admin
+  // Rutas exclusivas de admin
   if (isAdminOnly) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Para rutas de módulo: verificar cargo_permisos
+  // Verificar cargo_permisos con sub-módulo
   if (modulo) {
     if (profile?.empleado_id) {
       const { data: empleado } = await supabase
@@ -100,14 +118,13 @@ export async function proxy(request: NextRequest) {
         .single()
 
       if (empleado?.cargo_id) {
-        const { data: permiso } = await supabase
+        const { data: permisos } = await supabase
           .from('cargo_permisos')
           .select('modulo')
           .eq('cargo_id', empleado.cargo_id)
-          .eq('modulo', modulo)
-          .maybeSingle()
 
-        if (permiso) return response
+        const list = (permisos ?? []).map(p => p.modulo)
+        if (hasPermiso(list, modulo)) return response
       }
     }
 

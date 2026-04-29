@@ -70,14 +70,16 @@ async function checkModulePerm(modulo: string) {
 
   if (!empleado?.cargo_id) return { supabase, user, role, allowed: false, error: 'Sin permisos para este módulo' }
 
-  const { data: permiso } = await supabase
+  const { data: permisos } = await supabase
     .from('cargo_permisos')
     .select('modulo')
     .eq('cargo_id', empleado.cargo_id)
-    .eq('modulo', modulo)
-    .maybeSingle()
 
-  if (!permiso) return { supabase, user, role, allowed: false, error: 'Sin permisos para este módulo' }
+  const list = (permisos ?? []).map(p => p.modulo)
+  // Exact match OR has a more-specific permission that implies this key
+  const allowed = list.includes(modulo) || list.some(p => p.startsWith(modulo + '.'))
+
+  if (!allowed) return { supabase, user, role, allowed: false, error: 'Sin permisos para este módulo' }
 
   return { supabase, user, role, allowed: true, error: null }
 }
@@ -587,7 +589,7 @@ export async function createProductionOrder(data: unknown): Promise<ActionResult
   const parsed = ProductionOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const ctx = await checkModulePerm('produccion')
+  const ctx = await checkModulePerm('produccion.ordenes.crear')
   if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
   const { supabase } = ctx
 
@@ -614,7 +616,7 @@ export async function createPurchaseOrder(data: unknown): Promise<ActionResult> 
   const parsed = CreatePurchaseOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const ctx = await checkModulePerm('compras')
+  const ctx = await checkModulePerm('compras.ordenes.crear')
   if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
   const { supabase, user } = ctx
 
@@ -651,7 +653,7 @@ export async function receivePurchaseOrder(data: unknown): Promise<ActionResult>
   const parsed = ReceiveOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const ctx = await checkModulePerm('compras')
+  const ctx = await checkModulePerm('compras.ordenes.recibir')
   if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
   const { supabase, user } = ctx
 
@@ -735,9 +737,9 @@ export async function recordAdjustment(data: unknown): Promise<ActionResult> {
   const parsed = AdjustmentSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user, role } = await getUserWithRole()
-  if (!user) return { error: 'No autorizado' }
-  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+  const ctx = await checkModulePerm('inventario.ajustes')
+  if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
+  const { supabase, user } = ctx
 
   const limited = checkRateLimit(`recordAdjustment:${user.id}`, 15, 60_000)
   if (limited) return limited
@@ -769,7 +771,7 @@ export async function completeProductionOrder(
   const parsed = CompleteProductionSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error) as { error: string }
 
-  const ctx = await checkModulePerm('produccion')
+  const ctx = await checkModulePerm('produccion.ordenes.completar')
   if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' } as { error: string }
   const { supabase, user } = ctx
 
@@ -1248,7 +1250,7 @@ export async function upsertEmpresaConfig(data: unknown): Promise<ActionResult> 
 
 export async function submitForApproval(orderId: string): Promise<ActionResult> {
   if (!z.string().uuid().safeParse(orderId).success) return { error: 'ID inválido' }
-  const ctx = await checkModulePerm('compras')
+  const ctx = await checkModulePerm('compras.ordenes.crear')
   if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
   const { supabase, user } = ctx
 

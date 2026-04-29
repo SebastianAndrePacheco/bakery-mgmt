@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { Sidebar } from './sidebar'
-import { TODOS_LOS_MODULOS, MODULOS_CONFIGURABLES } from '@/utils/permissions'
+import { TODOS_LOS_MODULOS, modulosVisibles } from '@/utils/permissions'
 
 export async function SidebarWrapper() {
   const supabase = await createClient()
@@ -34,14 +34,14 @@ export async function SidebarWrapper() {
     return <Sidebar modulos={['dashboard']} displayName={profile.full_name} />
   }
 
-  // Obtener módulos asignados al cargo
+  // Obtener todos los sub-módulos asignados al cargo
   const { data: permisos } = await supabase
     .from('cargo_permisos')
     .select('modulo')
     .eq('cargo_id', empleado.cargo_id)
-    .in('modulo', Object.keys(MODULOS_CONFIGURABLES))
 
-  const modulos = ['dashboard', ...((permisos ?? []).map(p => p.modulo))]
+  // Derivar qué módulos padre mostrar en el sidebar
+  const modulos = modulosVisibles((permisos ?? []).map(p => p.modulo))
 
   return <Sidebar modulos={[...new Set(modulos)]} displayName={profile.full_name} />
 }

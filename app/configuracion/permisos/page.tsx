@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Breadcrumb } from '@/components/ui/breadcrumb'
 import { PermisosManager } from '@/components/forms/permisos-manager'
-import { MODULOS_CONFIGURABLES } from '@/utils/permissions'
+import { MODULOS_CONFIGURABLES, TODOS_LOS_SUBMODULOS } from '@/utils/permissions'
 
 export default async function PermisosPage() {
   const supabase = await createClient()
@@ -21,7 +21,7 @@ export default async function PermisosPage() {
 
   const [{ data: cargos }, { data: permisos }] = await Promise.all([
     supabase.from('cargos').select('id, nombre').eq('is_active', true).order('nombre'),
-    supabase.from('cargo_permisos').select('cargo_id, modulo'),
+    supabase.from('cargo_permisos').select('cargo_id, modulo').in('modulo', TODOS_LOS_SUBMODULOS),
   ])
 
   // Armar mapa: cargo_id → Set de módulos

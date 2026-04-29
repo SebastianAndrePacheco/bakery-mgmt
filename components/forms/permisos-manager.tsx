@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { setCargoPermisos } from '@/app/actions'
 import { CheckCircle, Loader2 } from 'lucide-react'
+import type { ModuloConf } from '@/utils/permissions'
 
 interface Cargo {
   id: string
@@ -13,11 +14,10 @@ interface Cargo {
 interface PermisosManagerProps {
   cargos: Cargo[]
   permisosMap: Record<string, string[]>
-  modulos: Record<string, string>
+  modulos: ModuloConf[]
 }
 
 export function PermisosManager({ cargos, permisosMap, modulos }: PermisosManagerProps) {
-  // Estado local: cargo_id → Set de módulos activos
   const [state, setState] = useState<Record<string, Set<string>>>(() => {
     const initial: Record<string, Set<string>> = {}
     for (const cargo of cargos) {
@@ -29,11 +29,26 @@ export function PermisosManager({ cargos, permisosMap, modulos }: PermisosManage
   const [savingId, setSavingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const toggle = (cargoId: string, modulo: string) => {
+  const toggle = (cargoId: string, key: string) => {
     setState(prev => {
       const next = new Set(prev[cargoId])
-      if (next.has(modulo)) next.delete(modulo)
-      else next.add(modulo)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return { ...prev, [cargoId]: next }
+    })
+  }
+
+  const toggleModulo = (cargoId: string, modulo: ModuloConf) => {
+    const keys = modulo.submodulos.map(s => s.key)
+    setState(prev => {
+      const current = prev[cargoId]
+      const allChecked = keys.every(k => current.has(k))
+      const next = new Set(current)
+      if (allChecked) {
+        keys.forEach(k => next.delete(k))
+      } else {
+        keys.forEach(k => next.add(k))
+      }
       return { ...prev, [cargoId]: next }
     })
   }
@@ -51,7 +66,7 @@ export function PermisosManager({ cargos, permisosMap, modulos }: PermisosManage
     })
   }
 
-  const moduloKeys = Object.keys(modulos).filter(m => m !== 'dashboard')
+  const configurables = modulos.filter(m => m.key !== 'dashboard')
 
   if (cargos.length === 0) {
     return (
@@ -63,71 +78,80 @@ export function PermisosManager({ cargos, permisosMap, modulos }: PermisosManage
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b">
-            <th className="text-left py-3 pr-6 font-semibold text-slate-700 w-48">Cargo</th>
-            {/* Dashboard siempre activo — columna informativa */}
-            <th className="text-center py-3 px-4 font-semibold text-slate-400 text-xs w-28">
-              Dashboard
-              <div className="text-xs font-normal text-slate-400">(siempre)</div>
-            </th>
-            {moduloKeys.map(m => (
-              <th key={m} className="text-center py-3 px-4 font-semibold text-slate-700 w-28">
-                {modulos[m]}
-              </th>
-            ))}
-            <th className="w-28"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {cargos.map(cargo => {
-            const isSaving = savingId === cargo.id && isPending
-            return (
-              <tr key={cargo.id} className="hover:bg-slate-50">
-                <td className="py-4 pr-6 font-medium text-slate-800">{cargo.nombre}</td>
+    <div className="space-y-6">
+      {cargos.map(cargo => {
+        const isSaving = savingId === cargo.id && isPending
+        const permisos = state[cargo.id]
 
-                {/* Dashboard — siempre marcado, no editable */}
-                <td className="py-4 px-4 text-center">
-                  <input
-                    type="checkbox"
-                    checked
-                    disabled
-                    className="w-4 h-4 accent-amber-500 opacity-50 cursor-not-allowed"
-                  />
-                </td>
+        return (
+          <div key={cargo.id} className="border rounded-lg overflow-hidden">
+            {/* Cargo header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b">
+              <span className="font-semibold text-slate-800">{cargo.nombre}</span>
+              <button
+                onClick={() => save(cargo.id)}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                {isSaving ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-3 h-3" />
+                )}
+                Guardar
+              </button>
+            </div>
 
-                {moduloKeys.map(m => (
-                  <td key={m} className="py-4 px-4 text-center">
-                    <input
-                      type="checkbox"
-                      checked={state[cargo.id]?.has(m) ?? false}
-                      onChange={() => toggle(cargo.id, m)}
-                      className="w-4 h-4 accent-amber-500 cursor-pointer"
-                    />
-                  </td>
-                ))}
+            {/* Módulos y sub-módulos */}
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {configurables.map(modulo => {
+                const subKeys = modulo.submodulos.map(s => s.key)
+                const checkedCount = subKeys.filter(k => permisos.has(k)).length
+                const allChecked = checkedCount === subKeys.length
+                const someChecked = checkedCount > 0 && !allChecked
 
-                <td className="py-4 pl-4">
-                  <button
-                    onClick={() => save(cargo.id)}
-                    disabled={isSaving}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium hover:bg-slate-700 disabled:opacity-50 transition-colors"
-                  >
-                    {isSaving ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-3 h-3" />
-                    )}
-                    Guardar
-                  </button>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                return (
+                  <div key={modulo.key} className="rounded-md border p-3 space-y-2">
+                    {/* Module header with select-all */}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={allChecked}
+                        ref={el => {
+                          if (el) el.indeterminate = someChecked
+                        }}
+                        onChange={() => toggleModulo(cargo.id, modulo)}
+                        className="w-4 h-4 accent-amber-500 cursor-pointer"
+                      />
+                      <span className="text-sm font-semibold text-slate-700">{modulo.label}</span>
+                      {checkedCount > 0 && (
+                        <span className="ml-auto text-xs text-slate-400">
+                          {checkedCount}/{subKeys.length}
+                        </span>
+                      )}
+                    </label>
+
+                    {/* Sub-modules */}
+                    <div className="pl-6 space-y-1.5">
+                      {modulo.submodulos.map(sub => (
+                        <label key={sub.key} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={permisos.has(sub.key)}
+                            onChange={() => toggle(cargo.id, sub.key)}
+                            className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+                          />
+                          <span className="text-sm text-slate-600">{sub.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
