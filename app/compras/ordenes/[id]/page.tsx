@@ -60,7 +60,8 @@ export default async function PurchaseOrderDetailPage({
     supabase
       .from('purchase_order_items')
       .select('*, supply:supplies(id, code, name, unit_id, unit:units(id, name, symbol))')
-      .eq('purchase_order_id', id),
+      .eq('purchase_order_id', id)
+      .order('created_at'),
     supabase
       .from('purchase_order_approvals')
       .select('*')
@@ -190,21 +191,35 @@ export default async function PurchaseOrderDetailPage({
                 <tr>
                   <th className="text-left py-3 px-4 font-semibold text-sm">Código</th>
                   <th className="text-left py-3 px-4 font-semibold text-sm">Insumo</th>
-                  <th className="text-right py-3 px-4 font-semibold text-sm">Cantidad</th>
+                  <th className="text-right py-3 px-4 font-semibold text-sm">Cantidad ordenada</th>
                   <th className="text-right py-3 px-4 font-semibold text-sm">P. Unit. (sin IGV)</th>
                   <th className="text-right py-3 px-4 font-semibold text-sm">Subtotal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items?.map((item) => (
-                  <tr key={item.id}>
-                    <td className="py-3 px-4 font-mono text-sm">{item.supply.code}</td>
-                    <td className="py-3 px-4 font-medium">{item.supply.name}</td>
-                    <td className="py-3 px-4 text-right">{item.quantity} {item.supply.unit?.symbol}</td>
-                    <td className="py-3 px-4 text-right">{formatCurrency(item.unit_price)}</td>
-                    <td className="py-3 px-4 text-right font-semibold">{formatCurrency(item.total)}</td>
-                  </tr>
-                ))}
+                {items?.map((item) => {
+                  const hasPackage = item.package_quantity != null && item.units_per_package != null && item.units_per_package > 1
+                  return (
+                    <tr key={item.id}>
+                      <td className="py-3 px-4 font-mono text-sm">{item.supply.code}</td>
+                      <td className="py-3 px-4 font-medium">{item.supply.name}</td>
+                      <td className="py-3 px-4 text-right">
+                        {hasPackage ? (
+                          <span>
+                            {item.package_quantity} {item.purchase_unit}
+                            <span className="text-slate-400 text-xs ml-1">
+                              × {item.units_per_package} {item.supply.unit?.symbol}
+                            </span>
+                          </span>
+                        ) : (
+                          <span>{item.quantity} {item.supply.unit?.symbol}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right">{formatCurrency(item.unit_price)}</td>
+                      <td className="py-3 px-4 text-right font-semibold">{formatCurrency(item.total)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

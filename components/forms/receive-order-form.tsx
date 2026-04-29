@@ -21,6 +21,9 @@ interface ReceiveOrderItem {
   supply_id: string
   quantity: number
   unit_price: number
+  package_quantity?: number
+  purchase_unit?: string
+  units_per_package?: number
   supply: {
     name: string
     code: string
@@ -48,13 +51,18 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
     received_date: localDateString(),
   })
 
-  const [receivedQuantities, setReceivedQuantities] = useState<Record<string, string>>(
-    items.reduce((acc, item) => ({ ...acc, [item.id]: item.quantity.toString() }), {})
+  // Cantidades en unidad de empaque (si aplica) o unidad de stock
+  const [receivedQty, setReceivedQty] = useState<Record<string, string>>(
+    items.reduce((acc, item) => ({
+      ...acc,
+      [item.id]: item.package_quantity != null
+        ? String(item.package_quantity)
+        : String(item.quantity),
+    }), {})
   )
 
   const [expirationDates, setExpirationDates] = useState<Record<string, string>>({})
 
-  // Pre-llenar número de comprobante con el siguiente correlativo al cambiar tipo
   useEffect(() => {
     const serie = SERIES_POR_TIPO[formData.comprobante_tipo] ?? 'F001'
     getNextCorrelativo(formData.comprobante_tipo, serie).then(next => {
@@ -66,13 +74,17 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
     e.preventDefault()
 
     const itemsPayload = items
-      .filter(item => parseFloat(receivedQuantities[item.id] || '0') > 0)
-      .map(item => ({
-        supply_id:         item.supply_id,
-        quantity_received: parseFloat(receivedQuantities[item.id] || '0'),
-        unit_price:        item.unit_price,
-        expiration_date:   expirationDates[item.id] || '',
-      }))
+      .filter(item => parseFloat(receivedQty[item.id] || '0') > 0)
+      .map(item => {
+        const inputQty = parseFloat(receivedQty[item.id] || '0')
+        const factor = item.units_per_package ?? 1
+        return {
+          supply_id:         item.supply_id,
+          quantity_received: inputQty * factor,  // convertir a unidades de stock
+          unit_price:        item.unit_price,
+          expiration_date:   expirationDates[item.id] || '',
+        }
+      })
 
     if (itemsPayload.length === 0) {
       toast.error('Ingresa al menos una cantidad recibida mayor a 0')
@@ -119,178 +131,197 @@ export function ReceiveOrderForm({ order, items }: ReceiveOrderFormProps) {
     <>
       {dialog}
       <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Documentos Peruanos */}
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-        <h3 className="font-semibold text-blue-900 mb-4">Documentos de Recepción (Perú)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-blue-900">
-              Guía de Remisión <span className="text-red-600">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.guia_remision}
-              onChange={(e) => setFormData({ ...formData, guia_remision: e.target.value })}
-              placeholder="001-00123456"
-              className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-blue-900">
-              Tipo de Comprobante <span className="text-red-600">*</span>
-            </label>
-            <select
-              required
-              value={formData.comprobante_tipo}
-              onChange={(e) => setFormData({
-                ...formData,
-                comprobante_tipo: e.target.value,
-                comprobante_serie: SERIES_POR_TIPO[e.target.value] ?? '',
-              })}
-              className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="factura">Factura</option>
-              <option value="boleta">Boleta de Venta</option>
-              <option value="ticket">Ticket</option>
-              <option value="recibo">Recibo</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-blue-900">
-              Serie <span className="text-red-600">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.comprobante_serie}
-              onChange={(e) => setFormData({ ...formData, comprobante_serie: e.target.value })}
-              placeholder="F001"
-              className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-blue-900">
-              Número <span className="text-red-600">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.comprobante_numero}
-              onChange={(e) => setFormData({ ...formData, comprobante_numero: e.target.value })}
-              placeholder="00098765"
-              className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-blue-900">
-              Fecha del Comprobante <span className="text-red-600">*</span>
-            </label>
-            <input
-              type="date"
-              required
-              value={formData.comprobante_fecha}
-              onChange={(e) => setFormData({ ...formData, comprobante_fecha: e.target.value })}
-              max={localDateString()}
-              className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-blue-900">
-              Monto del Comprobante <span className="text-red-600">*</span>
-            </label>
-            <input
-              type="number"
-              required
-              step="0.01"
-              value={formData.comprobante_monto}
-              onChange={(e) => setFormData({ ...formData, comprobante_monto: e.target.value })}
-              className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Fecha de recepción */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">
-          Fecha de Recepción <span className="text-red-600">*</span>
-        </label>
-        <input
-          type="date"
-          required
-          value={formData.received_date}
-          onChange={(e) => setFormData({ ...formData, received_date: e.target.value })}
-          max={localDateString()}
-          className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-      </div>
-
-      {/* Items a recibir */}
-      <div className="space-y-4">
-        <h3 className="font-semibold text-lg">Cantidades Recibidas</h3>
-        {items.map((item) => (
-          <div key={item.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
-            <div>
-              <div className="font-medium">{item.supply.name}</div>
-              <div className="text-sm text-slate-600">
-                Ordenado: {item.quantity} {item.supply.unit?.symbol}
-              </div>
-            </div>
+        {/* Documentos Peruanos */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h3 className="font-semibold text-blue-900 mb-4">Documentos de Recepción (Perú)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-              Cantidad recibida {item.supply.unit?.symbol ? `(${item.supply.unit.symbol})` : ''}
-            </label>
+              <label className="text-sm font-medium text-blue-900">
+                Guía de Remisión <span className="text-red-600">*</span>
+              </label>
               <input
-                type="number"
-                step="any"
-                min="0"
-                max={item.quantity}
-                value={receivedQuantities[item.id]}
-                onChange={(e) => setReceivedQuantities({
-                  ...receivedQuantities,
-                  [item.id]: e.target.value
-                })}
-                className="w-full px-3 py-2 border border-input rounded-md"
+                type="text"
+                required
+                value={formData.guia_remision}
+                onChange={(e) => setFormData({ ...formData, guia_remision: e.target.value })}
+                placeholder="001-00123456"
+                className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium">Fecha de Vencimiento</label>
+              <label className="text-sm font-medium text-blue-900">
+                Tipo de Comprobante <span className="text-red-600">*</span>
+              </label>
+              <select
+                required
+                value={formData.comprobante_tipo}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  comprobante_tipo: e.target.value,
+                  comprobante_serie: SERIES_POR_TIPO[e.target.value] ?? '',
+                })}
+                className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="factura">Factura</option>
+                <option value="boleta">Boleta de Venta</option>
+                <option value="ticket">Ticket</option>
+                <option value="recibo">Recibo</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-blue-900">
+                Serie <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.comprobante_serie}
+                onChange={(e) => setFormData({ ...formData, comprobante_serie: e.target.value })}
+                placeholder="F001"
+                className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-blue-900">
+                Número <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.comprobante_numero}
+                onChange={(e) => setFormData({ ...formData, comprobante_numero: e.target.value })}
+                placeholder="00098765"
+                className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-blue-900">
+                Fecha del Comprobante <span className="text-red-600">*</span>
+              </label>
               <input
                 type="date"
-                value={expirationDates[item.id] || ''}
-                onChange={(e) => setExpirationDates({
-                  ...expirationDates,
-                  [item.id]: e.target.value
-                })}
-                min={localDateString()}
-                className="w-full px-3 py-2 border border-input rounded-md"
+                required
+                value={formData.comprobante_fecha}
+                onChange={(e) => setFormData({ ...formData, comprobante_fecha: e.target.value })}
+                max={localDateString()}
+                className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-blue-900">
+                Monto del Comprobante <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="number"
+                required
+                step="0.01"
+                value={formData.comprobante_monto}
+                onChange={(e) => setFormData({ ...formData, comprobante_monto: e.target.value })}
+                className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="flex gap-4">
-        <Button type="submit" disabled={loading} className="flex-1">
-          <Package className="w-4 h-4 mr-2" />
-          {loading ? 'Procesando...' : 'Confirmar Recepción'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.back()}
-          disabled={loading}
-        >
-          Cancelar
-        </Button>
-      </div>
-    </form>
+        {/* Fecha de recepción */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Fecha de Recepción <span className="text-red-600">*</span>
+          </label>
+          <input
+            type="date"
+            required
+            value={formData.received_date}
+            onChange={(e) => setFormData({ ...formData, received_date: e.target.value })}
+            max={localDateString()}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        {/* Items */}
+        <div className="space-y-4">
+          <h3 className="font-semibold text-lg">Cantidades Recibidas</h3>
+          {items.map((item) => {
+            const hasPackage = item.units_per_package != null && item.units_per_package > 1
+            const inputVal = receivedQty[item.id]
+            const stockQty = hasPackage
+              ? (parseFloat(inputVal || '0') * (item.units_per_package!)).toFixed(3).replace(/\.?0+$/, '')
+              : null
+
+            return (
+              <div key={item.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+                <div>
+                  <div className="font-medium">{item.supply.name}</div>
+                  {hasPackage ? (
+                    <div className="text-sm text-slate-600">
+                      Ordenado: {item.package_quantity} {item.purchase_unit}
+                      <span className="text-slate-400 ml-1">
+                        (= {item.quantity} {item.supply.unit?.symbol})
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-600">
+                      Ordenado: {item.quantity} {item.supply.unit?.symbol}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {hasPackage
+                      ? `${item.purchase_unit}s recibidos`
+                      : `Cantidad recibida${item.supply.unit?.symbol ? ` (${item.supply.unit.symbol})` : ''}`}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={inputVal}
+                    onChange={(e) => setReceivedQty({ ...receivedQty, [item.id]: e.target.value })}
+                    className="w-full px-3 py-2 border border-input rounded-md"
+                  />
+                  {hasPackage && stockQty && parseFloat(stockQty) > 0 && (
+                    <p className="text-xs text-slate-400">
+                      = {stockQty} {item.supply.unit?.symbol} en inventario
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fecha de Vencimiento</label>
+                  <input
+                    type="date"
+                    value={expirationDates[item.id] || ''}
+                    onChange={(e) => setExpirationDates({ ...expirationDates, [item.id]: e.target.value })}
+                    min={localDateString()}
+                    className="w-full px-3 py-2 border border-input rounded-md"
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="flex gap-4">
+          <Button type="submit" disabled={loading} className="flex-1">
+            <Package className="w-4 h-4 mr-2" />
+            {loading ? 'Procesando...' : 'Confirmar Recepción'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+            disabled={loading}
+          >
+            Cancelar
+          </Button>
+        </div>
+      </form>
     </>
   )
 }

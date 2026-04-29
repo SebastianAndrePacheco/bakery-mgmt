@@ -247,7 +247,24 @@ export interface PurchaseOrderItem {
   quantity: number
   unit_price: number
   total: number
+  package_quantity?: number
+  purchase_unit?: string
+  units_per_package?: number
   created_at: string
+}
+
+export interface SupplierCatalogEntry {
+  id: string
+  supplier_id: string
+  supply_id: string
+  purchase_unit: string
+  units_per_package: number
+  default_price?: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  // Relations
+  supply?: Supply
 }
 
 export interface InventoryMovement {

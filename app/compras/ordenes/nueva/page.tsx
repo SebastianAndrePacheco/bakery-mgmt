@@ -26,6 +26,12 @@ export default async function NewPurchaseOrderPage() {
     .eq('is_active', true)
     .order('name', { ascending: true })
 
+  // Catálogo de empaques por proveedor
+  const { data: catalog } = await supabase
+    .from('supplier_supply_catalog')
+    .select('*')
+    .eq('is_active', true)
+
   return (
     <div className="space-y-6">
       <Breadcrumb items={[
@@ -55,9 +61,10 @@ export default async function NewPurchaseOrderPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <PurchaseOrderForm 
-            suppliers={suppliers || []} 
-            supplies={supplies || []} 
+          <PurchaseOrderForm
+            suppliers={suppliers || []}
+            supplies={supplies || []}
+            catalog={catalog || []}
           />
         </CardContent>
       </Card>

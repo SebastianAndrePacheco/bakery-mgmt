@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Supplier, Supply, Unit } from '@/utils/types/database.types'
+import { Supplier, Supply, Unit, SupplierCatalogEntry } from '@/utils/types/database.types'
 import { Plus, Trash2 } from 'lucide-react'
-import { formatCurrency, localDateString, multiplyQtyPrice, round2 } from '@/utils/helpers/currency'
+import { formatCurrency, localDateString, round2 } from '@/utils/helpers/currency'
 import { createPurchaseOrder } from '@/app/actions'
 import { toast } from 'sonner'
 
@@ -16,16 +16,20 @@ interface SupplyWithUnit extends Supply {
 interface PurchaseOrderFormProps {
   suppliers: Supplier[]
   supplies: SupplyWithUnit[]
+  catalog: SupplierCatalogEntry[]
 }
 
 interface OrderItem {
   supply_id: string
-  quantity: number
-  unit_price: number  // Derivado: total / quantity (precio por unidad de medida)
-  total: number       // Lo que ingresa el usuario: precio del ítem sin IGV
+  package_quantity: number   // lo que ingresa el usuario (cajas, sacos, etc.)
+  purchase_unit: string      // "Caja" del catálogo, o símbolo de unidad si no hay catálogo
+  units_per_package: number  // 12 para cajas de 12 L; 1 si no hay catálogo
+  quantity: number           // stock units = package_quantity × units_per_package
+  unit_price: number         // total / quantity  (por unidad de stock, para costeo)
+  total: number              // precio del ítem sin IGV (lo ingresa el usuario)
 }
 
-export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProps) {
+export function PurchaseOrderForm({ suppliers, supplies, catalog }: PurchaseOrderFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -35,36 +39,81 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     notes: '',
   })
   const [items, setItems] = useState<OrderItem[]>([
-    { supply_id: '', quantity: 0, unit_price: 0, total: 0 }
+    { supply_id: '', package_quantity: 0, purchase_unit: '', units_per_package: 1, quantity: 0, unit_price: 0, total: 0 }
   ])
 
+  // Entradas del catálogo para el proveedor seleccionado
+  const supplierCatalog = catalog.filter(e => e.supplier_id === formData.supplier_id)
+
+  const catalogEntry = (supplyId: string) =>
+    supplierCatalog.find(e => e.supply_id === supplyId)
+
   const addItem = () => {
-    setItems([...items, { supply_id: '', quantity: 0, unit_price: 0, total: 0 }])
+    setItems([...items, {
+      supply_id: '', package_quantity: 0, purchase_unit: '',
+      units_per_package: 1, quantity: 0, unit_price: 0, total: 0
+    }])
   }
 
   const removeItem = (index: number) => {
-    if (items.length > 1) {
-      setItems(items.filter((_, i) => i !== index))
-    }
+    if (items.length > 1) setItems(items.filter((_, i) => i !== index))
   }
 
-  const updateItem = (index: number, field: 'supply_id' | 'quantity' | 'total', value: number | string) => {
+  const updateItem = (
+    index: number,
+    field: 'supply_id' | 'package_quantity' | 'total',
+    value: number | string
+  ) => {
     const newItems = [...items]
-    newItems[index] = { ...newItems[index], [field]: value }
+    const item = { ...newItems[index], [field]: value }
 
-    // unit_price se deriva de total / quantity (no al revés)
-    const qty   = newItems[index].quantity
-    const total = newItems[index].total
-    newItems[index].unit_price = qty > 0 ? Math.round((total / qty) * 1_000_000) / 1_000_000 : 0
+    // Cuando cambia el insumo: actualiza unidad de empaque desde el catálogo
+    if (field === 'supply_id') {
+      const supply = supplies.find(s => s.id === value)
+      const entry = catalog.find(e => e.supplier_id === formData.supplier_id && e.supply_id === value)
+      item.purchase_unit     = entry ? entry.purchase_unit : (supply?.unit?.symbol ?? '')
+      item.units_per_package = entry ? entry.units_per_package : 1
+      item.total             = entry?.default_price ?? 0
+      item.package_quantity  = 0
+      item.quantity          = 0
+      item.unit_price        = 0
+    }
 
+    // Recalcular quantity y unit_price
+    const qty   = item.package_quantity * item.units_per_package
+    item.quantity   = qty
+    item.unit_price = qty > 0 ? Math.round((item.total / qty) * 1_000_000) / 1_000_000 : 0
+
+    newItems[index] = item
     setItems(newItems)
+  }
+
+  // Cuando cambia proveedor: limpiar datos de empaque de los ítems
+  const handleSupplierChange = (supplierId: string) => {
+    setFormData({ ...formData, supplier_id: supplierId })
+    setItems(prev => prev.map(item => {
+      if (!item.supply_id) return item
+      const entry = catalog.find(e => e.supplier_id === supplierId && e.supply_id === item.supply_id)
+      const supply = supplies.find(s => s.id === item.supply_id)
+      const newPurchaseUnit     = entry ? entry.purchase_unit : (supply?.unit?.symbol ?? '')
+      const newUnitsPerPackage  = entry ? entry.units_per_package : 1
+      const newQuantity         = item.package_quantity * newUnitsPerPackage
+      const newUnitPrice        = newQuantity > 0 ? Math.round((item.total / newQuantity) * 1_000_000) / 1_000_000 : 0
+      return {
+        ...item,
+        purchase_unit: newPurchaseUnit,
+        units_per_package: newUnitsPerPackage,
+        quantity: newQuantity,
+        unit_price: newUnitPrice,
+      }
+    }))
   }
 
   const calculateTotals = () => {
     let subtotal = 0
     let tax = 0
     for (const item of items) {
-      subtotal += item.total  // valor neto sin IGV
+      subtotal += item.total
       const tasa = supplies.find(s => s.id === item.supply_id)?.tasa_igv ?? 18
       tax += round2(item.total * (tasa / 100))
     }
@@ -76,10 +125,9 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
     setLoading(true)
 
     try {
-      // Validar que haya al menos un item con datos
-      const validItems = items.filter(item => item.supply_id && item.quantity > 0)
+      const validItems = items.filter(item => item.supply_id && item.package_quantity > 0)
       if (validItems.length === 0) {
-        toast.error('Debe agregar al menos un insumo a la orden')
+        toast.error('Debe agregar al menos un insumo con cantidad mayor a 0')
         setLoading(false)
         return
       }
@@ -93,12 +141,15 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
         notes:                  formData.notes,
         subtotal,
         tax,
-        total:                  totalWithIGV,
+        total: totalWithIGV,
         items: validItems.map(item => ({
-          supply_id:  item.supply_id,
-          quantity:   item.quantity,
-          unit_price: item.unit_price,
-          total:      item.total,
+          supply_id:         item.supply_id,
+          quantity:          item.quantity,
+          unit_price:        item.unit_price,
+          total:             item.total,
+          package_quantity:  item.units_per_package > 1 ? item.package_quantity : undefined,
+          purchase_unit:     item.units_per_package > 1 ? item.purchase_unit : undefined,
+          units_per_package: item.units_per_package > 1 ? item.units_per_package : undefined,
         })),
       })
 
@@ -129,7 +180,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
             id="supplier_id"
             required
             value={formData.supplier_id}
-            onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+            onChange={(e) => handleSupplierChange(e.target.value)}
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">Seleccionar proveedor</option>
@@ -171,9 +222,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="notes" className="text-sm font-medium">
-            Notas
-          </label>
+          <label htmlFor="notes" className="text-sm font-medium">Notas</label>
           <input
             id="notes"
             type="text"
@@ -185,7 +234,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
         </div>
       </div>
 
-      {/* Items de la orden */}
+      {/* Items */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Insumos</h3>
@@ -196,87 +245,109 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
         </div>
 
         <div className="space-y-3">
-          {items.map((item, index) => (
-            <div key={index} className="grid grid-cols-12 gap-3 items-end p-4 bg-slate-50 rounded-lg">
-              <div className="col-span-5 space-y-2">
-                <label className="text-xs font-medium text-slate-600">
-                  Insumo
-                </label>
-                <select
-                  value={item.supply_id}
-                  onChange={(e) => updateItem(index, 'supply_id', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Seleccionar</option>
-                  {supplies.map((supply) => (
-                    <option key={supply.id} value={supply.id}>
-                      {supply.name} ({supply.unit?.symbol})
-                    </option>
-                  ))}
-                </select>
-              </div>
+          {items.map((item, index) => {
+            const supply    = supplies.find(s => s.id === item.supply_id)
+            const entry     = catalogEntry(item.supply_id)
+            const hasPackage = entry != null
+            const stockQty  = item.package_quantity * item.units_per_package
 
-              <div className="col-span-2 space-y-2">
-                <label className="text-xs font-medium text-slate-600">
-                  Cantidad {item.supply_id ? `(${supplies.find(s => s.id === item.supply_id)?.unit?.symbol ?? ''})` : ''}
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={item.quantity || ''}
-                  onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
+            return (
+              <div key={index} className="p-4 bg-slate-50 rounded-lg space-y-3">
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  {/* Insumo */}
+                  <div className="col-span-5 space-y-2">
+                    <label className="text-xs font-medium text-slate-600">Insumo</label>
+                    <select
+                      value={item.supply_id}
+                      onChange={(e) => updateItem(index, 'supply_id', e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Seleccionar</option>
+                      {supplies.map((supply) => (
+                        <option key={supply.id} value={supply.id}>
+                          {supply.name} ({supply.unit?.symbol})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="col-span-2 space-y-2">
-                <label className="text-xs font-medium text-slate-600">
-                  Precio ítem (sin IGV)
-                  {(() => {
-                    const tasa = supplies.find(s => s.id === item.supply_id)?.tasa_igv
-                    if (tasa === undefined || !item.supply_id) return null
-                    return <span className="ml-1 text-slate-400">[IGV {tasa}%]</span>
-                  })()}
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={item.total || ''}
-                  onChange={(e) => updateItem(index, 'total', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {item.quantity > 0 && item.total > 0 && item.supply_id && (
-                  <p className="text-xs text-slate-400">
-                    = {formatCurrency(item.unit_price)} / {supplies.find(s => s.id === item.supply_id)?.unit?.symbol ?? 'u'}
-                  </p>
+                  {/* Cantidad */}
+                  <div className="col-span-2 space-y-2">
+                    <label className="text-xs font-medium text-slate-600">
+                      Cantidad{item.purchase_unit ? ` (${item.purchase_unit})` : ''}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={item.package_quantity || ''}
+                      onChange={(e) => updateItem(index, 'package_quantity', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {hasPackage && item.package_quantity > 0 && (
+                      <p className="text-xs text-slate-400">
+                        = {stockQty} {supply?.unit?.symbol}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Precio ítem */}
+                  <div className="col-span-2 space-y-2">
+                    <label className="text-xs font-medium text-slate-600">
+                      Precio ítem (sin IGV)
+                      {(() => {
+                        const tasa = supplies.find(s => s.id === item.supply_id)?.tasa_igv
+                        if (tasa === undefined || !item.supply_id) return null
+                        return <span className="ml-1 text-slate-400">[IGV {tasa}%]</span>
+                      })()}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={item.total || ''}
+                      onChange={(e) => updateItem(index, 'total', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {item.package_quantity > 0 && item.total > 0 && item.supply_id && (
+                      <p className="text-xs text-slate-400">
+                        = {formatCurrency(item.unit_price)} / {supply?.unit?.symbol ?? 'u'}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Total display */}
+                  <div className="col-span-2 space-y-2">
+                    <label className="text-xs font-medium text-slate-600">Total</label>
+                    <div className="px-3 py-2 text-sm font-semibold bg-white border border-slate-200 rounded-md">
+                      {formatCurrency(item.total)}
+                    </div>
+                  </div>
+
+                  {/* Eliminar */}
+                  <div className="col-span-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(index)}
+                      disabled={items.length === 1}
+                      className="hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Badge de empaque */}
+                {hasPackage && item.supply_id && (
+                  <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 w-fit">
+                    Empaque: 1 {entry.purchase_unit} = {entry.units_per_package} {supply?.unit?.symbol}
+                  </div>
                 )}
               </div>
-
-              <div className="col-span-2 space-y-2">
-                <label className="text-xs font-medium text-slate-600">
-                  Total
-                </label>
-                <div className="px-3 py-2 text-sm font-semibold bg-white border border-slate-200 rounded-md">
-                  {formatCurrency(item.total)}
-                </div>
-              </div>
-
-              <div className="col-span-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeItem(index)}
-                  disabled={items.length === 1}
-                  className="hover:bg-red-50 hover:text-red-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
@@ -300,11 +371,7 @@ export function PurchaseOrderForm({ suppliers, supplies }: PurchaseOrderFormProp
         <Button type="submit" disabled={loading}>
           {loading ? 'Creando...' : 'Crear Orden de Compra'}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.back()}
-        >
+        <Button type="button" variant="outline" onClick={() => router.back()}>
           Cancelar
         </Button>
       </div>

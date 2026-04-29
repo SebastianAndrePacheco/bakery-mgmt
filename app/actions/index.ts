@@ -194,6 +194,17 @@ const PurchaseOrderItemSchema = z.object({
   quantity: z.number().positive('La cantidad debe ser mayor a 0'),
   unit_price: z.number().min(0, 'Precio no puede ser negativo'),
   total: z.number().min(0, 'Total no puede ser negativo'),
+  package_quantity: z.number().positive().optional(),
+  purchase_unit: z.string().max(50).optional(),
+  units_per_package: z.number().positive().optional(),
+})
+
+const CatalogEntrySchema = z.object({
+  supplier_id: uuid,
+  supply_id: uuid,
+  purchase_unit: z.string().min(1, 'Nombre de empaque requerido').max(50).trim(),
+  units_per_package: z.number().positive('Debe ser mayor a 0'),
+  default_price: z.number().min(0).optional(),
 })
 
 const CreatePurchaseOrderSchema = z.object({
@@ -1398,5 +1409,59 @@ export async function setCargoPermisos(
   }
 
   revalidatePath('/configuracion/permisos')
+  return { success: true }
+}
+
+// ─────────────────────────────────────────────────────────────
+// CATÁLOGO PROVEEDOR-INSUMO (empaques de compra)
+// ─────────────────────────────────────────────────────────────
+
+export async function upsertCatalogEntry(data: unknown): Promise<ActionResult> {
+  const parsed = CatalogEntrySchema.safeParse(data)
+  if (!parsed.success) return firstError(parsed.error)
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  const { data: profile } = await supabase
+    .from('user_profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Solo administradores' }
+
+  const { error } = await supabase
+    .from('supplier_supply_catalog')
+    .upsert({
+      supplier_id:       parsed.data.supplier_id,
+      supply_id:         parsed.data.supply_id,
+      purchase_unit:     parsed.data.purchase_unit,
+      units_per_package: parsed.data.units_per_package,
+      default_price:     parsed.data.default_price ?? null,
+      is_active:         true,
+      updated_at:        new Date().toISOString(),
+    }, { onConflict: 'supplier_id,supply_id' })
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/compras/proveedores')
+  return { success: true }
+}
+
+export async function deleteCatalogEntry(id: string): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  const { data: profile } = await supabase
+    .from('user_profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Solo administradores' }
+
+  const { error } = await supabase
+    .from('supplier_supply_catalog')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/compras/proveedores')
   return { success: true }
 }
