@@ -74,7 +74,7 @@ export default async function PurchaseOrderDetailPage({
     : { data: null }
 
   const userRole = profile?.role ?? 'cajero'
-  const canReceive = ['pendiente', 'aprobado', 'enviado'].includes(order.status)
+  const canReceive = ['pendiente', 'aprobado', 'enviado', 'retrasado'].includes(order.status)
   const showActions = ['borrador', 'pendiente_aprobacion', 'aprobado'].includes(order.status)
 
   return (

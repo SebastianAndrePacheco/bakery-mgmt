@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, User, LogOut, AlertTriangle, Clock, ShoppingCart, X } from 'lucide-react'
+import { Bell, User, LogOut, AlertTriangle, Clock, ShoppingCart, PackageX, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 
 interface Notification {
-  type: 'vencido' | 'critico' | 'pendiente'
+  type: 'vencido' | 'critico' | 'pendiente' | 'retrasado'
   title: string
   desc: string
   href: string
@@ -40,6 +40,7 @@ export function Header() {
         { data: expired },
         { data: expiring },
         { data: pendingOrders },
+        { data: overdueOrders },
         { data: profile },
       ] = await Promise.all([
         supabase.from('supply_batches')
@@ -58,6 +59,9 @@ export function Header() {
         supabase.from('purchase_orders')
           .select('id')
           .in('status', ['pendiente', 'enviado']),
+        supabase.from('purchase_orders')
+          .select('id')
+          .eq('status', 'retrasado'),
         user
           ? supabase.from('user_profiles').select('full_name, role').eq('id', user.id).single()
           : Promise.resolve({ data: null }),
@@ -85,6 +89,15 @@ export function Header() {
           title: `${expiring.length} lote${expiring.length > 1 ? 's' : ''} vence${expiring.length === 1 ? '' : 'n'} en ≤ 7 días`,
           desc: 'Usar o registrar antes del vencimiento',
           href: '/reportes/vencimientos',
+        })
+      }
+
+      if (overdueOrders && overdueOrders.length > 0) {
+        notifs.push({
+          type: 'retrasado',
+          title: `${overdueOrders.length} orden${overdueOrders.length > 1 ? 'es' : ''} de compra retrasada${overdueOrders.length > 1 ? 's' : ''}`,
+          desc: 'Superaron su fecha de entrega esperada',
+          href: '/compras/ordenes',
         })
       }
 
@@ -122,8 +135,9 @@ export function Header() {
   }
 
   const iconForType = (type: Notification['type']) => {
-    if (type === 'vencido') return <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-    if (type === 'critico') return <Clock className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+    if (type === 'vencido')   return <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+    if (type === 'critico')   return <Clock className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+    if (type === 'retrasado') return <PackageX className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
     return <ShoppingCart className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
   }
 
