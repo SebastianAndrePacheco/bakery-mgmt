@@ -4,12 +4,20 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { adminCreateUser } from '@/app/actions'
+import { UserCheck } from 'lucide-react'
+
+interface PersonaData {
+  nombres:           string
+  apellido_paterno:  string
+  apellido_materno?: string | null
+  telefono?:         string | null
+  email?:            string | null
+}
 
 interface EmpleadoOption {
-  id: string
-  user_id?: string | null
-  persona: { nombres: string; apellido_paterno: string } | null
-  cargo:   { nombre: string } | null
+  id:       string
+  persona:  PersonaData | null
+  cargo:    { nombre: string } | null
 }
 
 interface UserCreateFormProps {
@@ -19,7 +27,8 @@ interface UserCreateFormProps {
 export function UserCreateForm({ empleadosSinAcceso }: UserCreateFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
+  const [autoFilled, setAutoFilled] = useState(false)
 
   const [formData, setFormData] = useState({
     email:       '',
@@ -29,6 +38,33 @@ export function UserCreateForm({ empleadosSinAcceso }: UserCreateFormProps) {
     phone:       '',
     empleado_id: '',
   })
+
+  const handleEmpleadoChange = (empleadoId: string) => {
+    if (!empleadoId) {
+      setFormData(prev => ({ ...prev, empleado_id: '' }))
+      setAutoFilled(false)
+      return
+    }
+
+    const emp = empleadosSinAcceso.find(e => e.id === empleadoId)
+    if (!emp?.persona) {
+      setFormData(prev => ({ ...prev, empleado_id: empleadoId }))
+      return
+    }
+
+    const p = emp.persona
+    const apellidos = [p.apellido_paterno, p.apellido_materno].filter(Boolean).join(' ')
+    const fullName  = `${p.nombres} ${apellidos}`.trim()
+
+    setFormData(prev => ({
+      ...prev,
+      empleado_id: empleadoId,
+      full_name:   fullName,
+      phone:       p.telefono  ?? prev.phone,
+      email:       p.email     ?? prev.email,
+    }))
+    setAutoFilled(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,6 +87,46 @@ export function UserCreateForm({ empleadosSinAcceso }: UserCreateFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+
+      {/* ── Selección de empleado (al inicio para auto-completar) ── */}
+      <div className="space-y-2 pb-4 border-b">
+        <label className="text-sm font-medium">
+          Vincular a empleado existente{' '}
+          <span className="text-slate-400 font-normal">(opcional)</span>
+        </label>
+        <select
+          value={formData.empleado_id}
+          onChange={(e) => handleEmpleadoChange(e.target.value)}
+          className={inputCls}
+        >
+          <option value="">— Seleccionar empleado —</option>
+          {empleadosSinAcceso.map((emp) => {
+            const p      = emp.persona
+            const nombre = p ? `${p.nombres} ${p.apellido_paterno}` : 'Sin nombre'
+            const cargo  = emp.cargo?.nombre ?? ''
+            return (
+              <option key={emp.id} value={emp.id}>
+                {nombre}{cargo ? ` — ${cargo}` : ''}
+              </option>
+            )
+          })}
+        </select>
+
+        {empleadosSinAcceso.length === 0 && (
+          <p className="text-xs text-slate-400">
+            Todos los empleados activos ya tienen acceso al sistema.
+          </p>
+        )}
+
+        {autoFilled && (
+          <p className="flex items-center gap-1.5 text-xs text-green-700">
+            <UserCheck className="w-3.5 h-3.5" />
+            Datos completados desde la ficha del empleado — puedes editarlos si es necesario.
+          </p>
+        )}
+      </div>
+
+      {/* ── Datos del usuario ── */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           Nombre Completo <span className="text-red-600">*</span>
@@ -71,6 +147,16 @@ export function UserCreateForm({ empleadosSinAcceso }: UserCreateFormProps) {
           type="email" required value={formData.email}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           placeholder="ana@panaderia.com"
+          className={inputCls}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Teléfono</label>
+        <input
+          type="tel" value={formData.phone}
+          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          placeholder="987654321"
           className={inputCls}
         />
       </div>
@@ -100,46 +186,9 @@ export function UserCreateForm({ empleadosSinAcceso }: UserCreateFormProps) {
           <option value="cajero">Usuario</option>
           <option value="admin">Administrador</option>
         </select>
-        <p className="text-xs text-slate-500">El rol define qué partes del sistema puede ver y usar.</p>
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Teléfono</label>
-        <input
-          type="tel" value={formData.phone}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          placeholder="987654321"
-          className={inputCls}
-        />
-      </div>
-
-      {/* Vincular a empleado */}
-      <div className="space-y-2 pt-2 border-t">
-        <label className="text-sm font-medium">
-          Vincular a empleado <span className="text-slate-400 font-normal">(opcional)</span>
-        </label>
-        <select
-          value={formData.empleado_id}
-          onChange={(e) => setFormData({ ...formData, empleado_id: e.target.value })}
-          className={inputCls}
-        >
-          <option value="">— Sin vincular —</option>
-          {empleadosSinAcceso.map((emp) => {
-            const p = emp.persona as { nombres: string; apellido_paterno: string } | null
-            const nombre = p ? `${p.nombres} ${p.apellido_paterno}` : 'Sin nombre'
-            const cargo  = (emp.cargo as { nombre: string } | null)?.nombre ?? ''
-            return (
-              <option key={emp.id} value={emp.id}>
-                {nombre}{cargo ? ` — ${cargo}` : ''}
-              </option>
-            )
-          })}
-        </select>
-        {empleadosSinAcceso.length === 0 && (
-          <p className="text-xs text-slate-400">Todos los empleados activos ya tienen acceso al sistema.</p>
-        )}
         <p className="text-xs text-slate-500">
-          Vincula este usuario a su ficha de empleado para mantener los datos conectados.
+          El acceso detallado a módulos se configura por cargo en{' '}
+          <a href="/configuracion/permisos" className="underline text-blue-600">Configuración → Permisos</a>.
         </p>
       </div>
 

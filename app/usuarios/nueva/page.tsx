@@ -27,7 +27,7 @@ export default async function NuevoUsuarioPage() {
     .from('empleados')
     .select(`
       id,
-      persona:personas(nombres, apellido_paterno),
+      persona:personas(nombres, apellido_paterno, apellido_materno, telefono, email),
       cargo:cargos(nombre)
     `)
     .is('user_id', null)
