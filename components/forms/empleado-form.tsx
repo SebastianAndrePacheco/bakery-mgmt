@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Cargo, Empleado, Persona } from '@/utils/types/database.types'
-import { createEmpleado, updateEmpleado } from '@/app/actions'
+import { createEmpleado, updateEmpleado, consultarDNI } from '@/app/actions'
 import { localDateString } from '@/utils/helpers/currency'
 import { validarDNI, validarCelular, validarEmail, validarCE } from '@/utils/validators'
 import { toast } from 'sonner'
@@ -18,8 +18,9 @@ const BANCOS = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'BanBif', 'Mibanco', '
 
 export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [loading, setLoading]       = useState(false)
+  const [dniLoading, setDniLoading] = useState(false)
+  const [errors, setErrors]         = useState<Record<string, string>>({})
   const isEdit = !!empleado
 
   const validate = () => {
@@ -63,6 +64,30 @@ export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
     cci:           empleado?.cci           ?? '',
     is_active:     empleado?.is_active     ?? true,
   })
+
+  const handleConsultarDNI = async () => {
+    if (persona.numero_doc.length !== 8) {
+      toast.error('Ingresa los 8 dígitos del DNI primero')
+      return
+    }
+    setDniLoading(true)
+    const result = await consultarDNI(persona.numero_doc)
+    setDniLoading(false)
+
+    if ('error' in result) {
+      toast.error(result.error)
+      return
+    }
+
+    const { nombres, apellido_paterno, apellido_materno } = result.data
+    setPersona(prev => ({
+      ...prev,
+      nombres:          nombres          || prev.nombres,
+      apellido_paterno: apellido_paterno || prev.apellido_paterno,
+      apellido_materno: apellido_materno || prev.apellido_materno,
+    }))
+    toast.success('Datos completados desde RENIEC')
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -121,13 +146,25 @@ export function EmpleadoForm({ cargos, empleado }: EmpleadoFormProps) {
           </div>
           <div className="space-y-1.5">
             <label className={labelCls}>N° documento <span className="text-red-500">*</span></label>
-            <input
-              required type="text" value={persona.numero_doc}
-              maxLength={persona.tipo_doc === 'DNI' ? 8 : 20}
-              onChange={(e) => setPersona({ ...persona, numero_doc: e.target.value.replace(/\D/g, '') })}
-              placeholder={persona.tipo_doc === 'DNI' ? '12345678' : ''}
-              className={inputCls + (errors.numero_doc ? ' border-red-400' : '')}
-            />
+            <div className="flex gap-2">
+              <input
+                required type="text" value={persona.numero_doc}
+                maxLength={persona.tipo_doc === 'DNI' ? 8 : 20}
+                onChange={(e) => setPersona({ ...persona, numero_doc: e.target.value.replace(/\D/g, '') })}
+                placeholder={persona.tipo_doc === 'DNI' ? '12345678' : ''}
+                className={inputCls + (errors.numero_doc ? ' border-red-400' : '')}
+              />
+              {persona.tipo_doc === 'DNI' && (
+                <button
+                  type="button"
+                  onClick={handleConsultarDNI}
+                  disabled={dniLoading || persona.numero_doc.length !== 8}
+                  className="shrink-0 px-3 py-2 text-xs font-medium rounded-md border border-input bg-slate-50 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                >
+                  {dniLoading ? '...' : 'RENIEC'}
+                </button>
+              )}
+            </div>
             {errors.numero_doc && <p className="text-xs text-red-600">{errors.numero_doc}</p>}
           </div>
           <div className="space-y-1.5">

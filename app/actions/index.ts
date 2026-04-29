@@ -880,6 +880,47 @@ function detectTipoProveedor(nombre: string): string {
   return ''
 }
 
+// ─── RENIEC DNI lookup ────────────────────────────────���──────────────────────
+
+function toTitleCase(str: string) {
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+}
+
+export async function consultarDNI(dni: string): Promise<
+  { error: string } | { data: { nombres: string; apellido_paterno: string; apellido_materno: string } }
+> {
+  if (!/^\d{8}$/.test(dni)) return { error: 'DNI debe tener 8 dígitos' }
+
+  try {
+    const token = process.env.DECOLECTA_TOKEN
+    if (!token) return { error: 'Configura DECOLECTA_TOKEN en las variables de entorno.' }
+
+    const res = await fetch(`https://api.decolecta.com/v1/reniec/dni?numero=${dni}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      next: { revalidate: 86400 },
+    })
+
+    if (res.status === 404) return { error: 'DNI no encontrado en RENIEC' }
+    if (res.status === 401 || res.status === 403) return { error: 'Token inválido. Verifica DECOLECTA_TOKEN.' }
+    if (res.status === 429) return { error: 'Límite de consultas alcanzado. Intenta en unos minutos.' }
+    if (!res.ok) {
+      console.error('[consultarDNI] HTTP', res.status, await res.text().catch(() => ''))
+      return { error: `No se pudo consultar RENIEC (HTTP ${res.status}).` }
+    }
+
+    const raw = await res.json()
+    return {
+      data: {
+        nombres:          toTitleCase(raw.first_name        ?? ''),
+        apellido_paterno: toTitleCase(raw.first_last_name   ?? ''),
+        apellido_materno: toTitleCase(raw.second_last_name  ?? ''),
+      },
+    }
+  } catch {
+    return { error: 'Error de conexión. Verifica tu internet.' }
+  }
+}
+
 export async function consultarRUC(ruc: string): Promise<{ error: string } | { data: SunatRUCData }> {
   if (!/^\d{11}$/.test(ruc)) return { error: 'RUC debe tener 11 dígitos' }
 
