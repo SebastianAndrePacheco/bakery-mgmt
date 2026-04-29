@@ -25,9 +25,8 @@ export function Header() {
   const bellRef = useRef<HTMLDivElement>(null)
 
   const ROLE_LABELS: Record<string, string> = {
-    admin: 'Administrador',
-    panadero: 'Panadero',
-    cajero: 'Cajero',
+    admin:  'Administrador',
+    cajero: 'Usuario',
   }
 
   useEffect(() => {

@@ -452,14 +452,14 @@ const CreateUserSchema = z.object({
   email:       z.string().email('Email inválido'),
   password:    z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
   full_name:   z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100).trim(),
-  role:        z.enum(['admin', 'panadero', 'cajero']),
+  role:        z.enum(['admin', 'cajero']),
   phone:       z.string().max(20).trim().optional().or(z.literal('')),
   empleado_id: z.string().uuid().optional().or(z.literal('')),
 })
 
 const UpdateUserSchema = z.object({
   full_name:   z.string().min(2).max(100).trim(),
-  role:        z.enum(['admin', 'panadero', 'cajero']),
+  role:        z.enum(['admin', 'cajero']),
   phone:       z.string().max(20).trim().optional().or(z.literal('')),
   is_active:   z.boolean(),
   empleado_id: z.string().uuid().optional().or(z.literal('')),

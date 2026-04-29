@@ -7,15 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserPlus, Pencil } from 'lucide-react'
 
 const roleLabels: Record<string, string> = {
-  admin:    'Administrador',
-  panadero: 'Panadero',
-  cajero:   'Cajero',
+  admin:  'Administrador',
+  cajero: 'Usuario',
 }
 
 const roleBadge: Record<string, string> = {
-  admin:    'bg-purple-100 text-purple-700',
-  panadero: 'bg-amber-100 text-amber-700',
-  cajero:   'bg-blue-100 text-blue-700',
+  admin:  'bg-purple-100 text-purple-700',
+  cajero: 'bg-blue-100 text-blue-700',
 }
 
 export default async function UsuariosPage() {

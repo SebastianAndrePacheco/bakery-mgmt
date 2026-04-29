@@ -16,7 +16,7 @@ interface UserEditFormProps {
   userId: string
   defaultValues: {
     full_name:   string
-    role:        'admin' | 'panadero' | 'cajero'
+    role:        'admin' | 'cajero'
     phone:       string
     is_active:   boolean
     empleado_id: string
@@ -96,8 +96,7 @@ export function UserEditForm({ userId, defaultValues, empleados }: UserEditFormP
             onChange={(e) => setFormData({ ...formData, role: e.target.value as typeof formData.role })}
             className={inputCls}
           >
-            <option value="panadero">Panadero</option>
-            <option value="cajero">Cajero</option>
+            <option value="cajero">Usuario</option>
             <option value="admin">Administrador</option>
           </select>
           <p className="text-xs text-slate-500">El rol define qué partes del sistema puede ver y usar.</p>

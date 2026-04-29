@@ -29,7 +29,6 @@ export const PRODUCTION_STATUS = {
 
 export const USER_ROLES = {
   ADMIN: 'admin',
-  PANADERO: 'panadero',
   CAJERO: 'cajero',
 } as const
 

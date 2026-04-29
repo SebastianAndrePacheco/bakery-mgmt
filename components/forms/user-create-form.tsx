@@ -25,7 +25,7 @@ export function UserCreateForm({ empleadosSinAcceso }: UserCreateFormProps) {
     email:       '',
     password:    '',
     full_name:   '',
-    role:        'panadero' as 'admin' | 'panadero' | 'cajero',
+    role:        'cajero' as 'admin' | 'cajero',
     phone:       '',
     empleado_id: '',
   })
@@ -97,8 +97,7 @@ export function UserCreateForm({ empleadosSinAcceso }: UserCreateFormProps) {
           onChange={(e) => setFormData({ ...formData, role: e.target.value as typeof formData.role })}
           className={inputCls}
         >
-          <option value="panadero">Panadero</option>
-          <option value="cajero">Cajero</option>
+          <option value="cajero">Usuario</option>
           <option value="admin">Administrador</option>
         </select>
         <p className="text-xs text-slate-500">El rol define qué partes del sistema puede ver y usar.</p>
