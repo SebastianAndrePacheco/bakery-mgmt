@@ -776,8 +776,7 @@ export async function loginUser(email: string, password: string): Promise<LoginR
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-  // Registrar intento en login_logs (no bloqueante)
-  void supabaseAdmin.from('login_logs').insert({
+  await supabaseAdmin.from('login_logs').insert({
     email,
     ip,
     success: !error,
