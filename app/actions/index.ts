@@ -49,6 +49,39 @@ async function getUserWithRole() {
   return { supabase, user, role: profile?.role as string | null }
 }
 
+async function checkModulePerm(modulo: string) {
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { supabase, user: null, role: null, allowed: false, error: 'No autorizado' }
+  if (role === 'admin') return { supabase, user, role, allowed: true, error: null }
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('empleado_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.empleado_id) return { supabase, user, role, allowed: false, error: 'Sin permisos para este módulo' }
+
+  const { data: empleado } = await supabase
+    .from('empleados')
+    .select('cargo_id')
+    .eq('id', profile.empleado_id)
+    .single()
+
+  if (!empleado?.cargo_id) return { supabase, user, role, allowed: false, error: 'Sin permisos para este módulo' }
+
+  const { data: permiso } = await supabase
+    .from('cargo_permisos')
+    .select('modulo')
+    .eq('cargo_id', empleado.cargo_id)
+    .eq('modulo', modulo)
+    .maybeSingle()
+
+  if (!permiso) return { supabase, user, role, allowed: false, error: 'Sin permisos para este módulo' }
+
+  return { supabase, user, role, allowed: true, error: null }
+}
+
 /**
  * Rate limiter en memoria por clave (usuario+acción). Válido para un único servidor —
  * suficiente para el uso interno de panadería. Para producción multi-instancia,
@@ -554,8 +587,9 @@ export async function createProductionOrder(data: unknown): Promise<ActionResult
   const parsed = ProductionOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUserWithRole()
-  if (!user) return { error: 'No autorizado' }
+  const ctx = await checkModulePerm('produccion')
+  if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
+  const { supabase } = ctx
 
   const orderNumber = `PROD-${Date.now()}`
   const { notes, ...rest } = parsed.data
@@ -580,8 +614,9 @@ export async function createPurchaseOrder(data: unknown): Promise<ActionResult> 
   const parsed = CreatePurchaseOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUserWithRole()
-  if (!user) return { error: 'No autorizado' }
+  const ctx = await checkModulePerm('compras')
+  if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
+  const { supabase, user } = ctx
 
   const limited = checkRateLimit(`createPurchaseOrder:${user.id}`, 10, 60_000)
   if (limited) return limited
@@ -616,8 +651,9 @@ export async function receivePurchaseOrder(data: unknown): Promise<ActionResult>
   const parsed = ReceiveOrderSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const { supabase, user } = await getUserWithRole()
-  if (!user) return { error: 'No autorizado' }
+  const ctx = await checkModulePerm('compras')
+  if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
+  const { supabase, user } = ctx
 
   const limited = checkRateLimit(`receivePurchaseOrder:${user.id}`, 10, 60_000)
   if (limited) return limited
@@ -733,8 +769,9 @@ export async function completeProductionOrder(
   const parsed = CompleteProductionSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error) as { error: string }
 
-  const { supabase, user } = await getUserWithRole()
-  if (!user) return { error: 'No autorizado' }
+  const ctx = await checkModulePerm('produccion')
+  if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' } as { error: string }
+  const { supabase, user } = ctx
 
   const limited = checkRateLimit(`completeProductionOrder:${user.id}`, 10, 60_000)
   if (limited) return limited as { error: string }
@@ -952,7 +989,10 @@ export async function createCargo(data: unknown): Promise<ActionResult> {
   const parsed = CargoSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const supabase = await createClient()
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
   const { error } = await supabase.from('cargos').insert(parsed.data)
   if (error) return dbError(error, 'createCargo')
 
@@ -967,7 +1007,10 @@ export async function updateCargo(id: string, data: unknown): Promise<ActionResu
   const parsed = CargoSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const supabase = await createClient()
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
   const { error } = await supabase.from('cargos').update(parsed.data).eq('id', id)
   if (error) return dbError(error, 'updateCargo')
 
@@ -976,7 +1019,10 @@ export async function updateCargo(id: string, data: unknown): Promise<ActionResu
 }
 
 export async function toggleCargoStatus(id: string, is_active: boolean): Promise<ActionResult> {
-  const supabase = await createClient()
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
   const { error } = await supabase.from('cargos').update({ is_active }).eq('id', id)
   if (error) return dbError(error, 'toggleCargoStatus')
 
@@ -1021,7 +1067,9 @@ export async function createEmpleado(data: unknown): Promise<ActionResult> {
   const parsed = CreateEmpleadoSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const supabase = await createClient()
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   // 1. Crear persona
   const { data: persona, error: personaErr } = await supabase
@@ -1058,7 +1106,9 @@ export async function updateEmpleado(
   const parsed = CreateEmpleadoSchema.safeParse(data)
   if (!parsed.success) return firstError(parsed.error)
 
-  const supabase = await createClient()
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
 
   const { error: personaErr } = await supabase
     .from('personas')
@@ -1084,7 +1134,10 @@ export async function updateEmpleado(
 }
 
 export async function toggleEmpleadoStatus(id: string, is_active: boolean): Promise<ActionResult> {
-  const supabase = await createClient()
+  const { supabase, user, role } = await getUserWithRole()
+  if (!user) return { error: 'No autorizado' }
+  if (role !== 'admin') return { error: 'Se requiere rol administrador' }
+
   const { error } = await supabase.from('empleados').update({ is_active }).eq('id', id)
   if (error) return dbError(error, 'toggleEmpleadoStatus')
 
@@ -1154,8 +1207,9 @@ export async function upsertEmpresaConfig(data: unknown): Promise<ActionResult> 
 
 export async function submitForApproval(orderId: string): Promise<ActionResult> {
   if (!z.string().uuid().safeParse(orderId).success) return { error: 'ID inválido' }
-  const { supabase, user } = await getUserWithRole()
-  if (!user) return { error: 'No autorizado' }
+  const ctx = await checkModulePerm('compras')
+  if (!ctx.user || !ctx.allowed) return { error: ctx.error ?? 'No autorizado' }
+  const { supabase, user } = ctx
 
   const { data: order } = await supabase
     .from('purchase_orders').select('status').eq('id', orderId).single()
