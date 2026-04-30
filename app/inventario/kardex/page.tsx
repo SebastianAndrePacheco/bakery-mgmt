@@ -68,7 +68,7 @@ export default async function KardexPage({
       .eq('status', 'disponible'),
     supabase
       .from('production_batches')
-      .select('product_id, current_quantity, production_cost, quantity_produced')
+      .select('product_id, current_quantity, unit_cost, total_cost, quantity_produced')
       .eq('status', 'disponible'),
   ])
 
@@ -96,7 +96,7 @@ export default async function KardexPage({
   const productStock = new Map<string, { qty: number; value: number }>()
   for (const b of productBatches ?? []) {
     const prev = productStock.get(b.product_id) ?? { qty: 0, value: 0 }
-    const unitCost = b.quantity_produced > 0 ? (b.production_cost ?? 0) / b.quantity_produced : 0
+    const unitCost = b.unit_cost ?? 0
     productStock.set(b.product_id, {
       qty:   prev.qty   + (b.current_quantity ?? 0),
       value: prev.value + (b.current_quantity ?? 0) * unitCost,
